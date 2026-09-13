@@ -1,0 +1,371 @@
+.status-screen {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+}
+
+.app {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.you-are {
+  font-size: 0.95rem;
+  opacity: 0.85;
+}
+
+/* -- landing ------------------------------------------------------------- */
+
+.landing {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem;
+  text-align: center;
+}
+
+.landing-panel {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.landing-panel input {
+  padding: 0.5rem;
+  font-size: 1rem;
+  text-transform: uppercase;
+  width: 8rem;
+}
+
+.landing-panel button {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.landing-error {
+  color: #c02020;
+}
+
+/* -- lobby ---------------------------------------------------------------- */
+
+.lobby {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  max-width: 700px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.lobby-hint {
+  opacity: 0.75;
+  font-size: 0.9rem;
+}
+
+.lobby-teams {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+}
+
+.team-panel {
+  flex: 1;
+  min-width: 220px;
+  border: 3px solid;
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.team-panel ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.team-panel li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.lobby-host-controls {
+  text-align: center;
+}
+
+.score-board {
+  display: flex;
+  gap: 1.5rem;
+  font-weight: 600;
+}
+
+.score-board .your-team {
+  color: var(--accent);
+}
+
+.trump-indicator {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.95rem;
+}
+
+/* -- table ------------------------------------------------------------ */
+
+.table {
+  width: 100%;
+  min-height: 260px;
+  background: var(--felt);
+  border: 6px solid var(--felt-dark);
+  border-radius: 16px;
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
+  grid-template-rows: auto 1fr;
+  align-items: center;
+  justify-items: center;
+  padding: 1rem;
+  gap: 0.5rem;
+  position: relative;
+}
+
+.seat {
+  color: #fff;
+  text-align: center;
+  padding: 0.4rem 0.8rem;
+  border-radius: 8px;
+}
+
+.seat.active-turn {
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.seat-top {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.seat-left {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.seat-right {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.seat-label {
+  font-weight: 600;
+}
+
+.dealer-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.2em;
+  height: 1.2em;
+  margin-left: 0.4em;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #000;
+  font-size: 0.7em;
+  font-weight: 700;
+}
+
+.seat-hand-size {
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.trick-area {
+  grid-column: 2;
+  grid-row: 2;
+  position: relative;
+  width: 140px;
+  height: 140px;
+}
+
+.trick-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.trick-play-top {
+  transform: translate(-50%, -140%);
+}
+
+.trick-play-bottom {
+  transform: translate(-50%, 40%);
+}
+
+.trick-play-left {
+  transform: translate(-140%, -50%);
+}
+
+.trick-play-right {
+  transform: translate(40%, -50%);
+}
+
+/* -- cards -------------------------------------------------------------- */
+
+.hand {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.playing-card {
+  width: 52px;
+  height: 72px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+  line-height: 1.1;
+  cursor: default;
+}
+
+button.playing-card {
+  cursor: pointer;
+}
+
+button.playing-card:hover:not(:disabled) {
+  transform: translateY(-4px);
+  transition: transform 0.1s ease;
+}
+
+.playing-card.red {
+  color: #c02020;
+}
+
+.playing-card.black {
+  color: #111;
+}
+
+.playing-card.illegal {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* -- panels -------------------------------------------------------------- */
+
+.bidding-panel,
+.trump-call-panel {
+  text-align: center;
+}
+
+.bidding-panel.waiting,
+.trump-call-panel.waiting {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.bid-buttons,
+.trump-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.bid-buttons button,
+.trump-buttons button {
+  padding: 0.5rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  background: #fff;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.bid-buttons button:disabled,
+.trump-buttons button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.bid-buttons button:not(:disabled):hover,
+.trump-buttons button:not(:disabled):hover {
+  border-color: var(--accent);
+}
+
+.bid-buttons button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.bid-points {
+  font-size: 0.7rem;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.bidding-panel p {
+  max-width: 32rem;
+  margin: 0 auto 0.5rem;
+  font-size: 0.9rem;
+}
+
+.bid-legend {
+  opacity: 0.8;
+}
+
+/* -- game over / errors --------------------------------------------------- */
+
+.game-over-screen {
+  text-align: center;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  font-weight: 600;
+  z-index: 10;
+}
+
+.toast-error {
+  bottom: 1.5rem;
+  background: #c02020;
+}
+
+.toast-info {
+  top: 1.5rem;
+  background: var(--felt-dark);
+}
