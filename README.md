@@ -4,14 +4,6 @@ A real-time, server-authoritative multiplayer implementation of Bid Euchre — a
 card game played in fixed 2v2 partnerships. Create a room, share the code with three other
 players, and play a full match live over WebSockets.
 
-## Why this project exists
-
-This is a portfolio piece built to demonstrate three things a typical CRUD app doesn't: real-time
-multiplayer sync over WebSockets, a rules engine with genuinely non-trivial validation logic
-(bidding ladders, trump/bower ranking, follow-suit legality, scoring), and a server-authoritative
-architecture — the client is never trusted to know whose turn it is or whether a move is legal;
-every action is validated server-side before any state change is broadcast.
-
 ## Features
 
 - **Room-code lobbies.** Create a room, get a short shareable code, and up to 4 players join by
@@ -36,10 +28,6 @@ the bugs found and fixed along the way).
 - **Frontend:** React + TypeScript, built with Vite. No UI framework dependency — plain CSS.
 - **Testing:** `pytest` (backend), `vitest` + React Testing Library (frontend).
 
-Python was chosen over a compiled language deliberately, not by default — the hard problems here
-(real-time sync correctness, rules validation, server authority) are language-agnostic design
-problems, not performance problems. See `CLAUDE.md` for the full rationale.
-
 ## Project structure
 
 ```
@@ -49,7 +37,6 @@ src/bid_euchre_server/   FastAPI app: room/lobby management, WebSocket wiring, t
                           GameSession turn orchestrator built on top of bid_euchre.
 tests/                   pytest suite for both packages above.
 frontend/                Vite + React + TypeScript client.
-CLAUDE.md                Full game rules, architecture principles, and build order.
 CHANGELOG.md             What's been built, step by step.
 ```
 
@@ -95,5 +82,4 @@ npm run lint
 
 Steps 1-4 of the build order are complete: the rules engine, the WebSocket server, the React
 frontend, and room-code lobbies. Not yet built: Discord OAuth2 + persistent accounts/history/
-leaderboard (step 5), and optional rule-based bot players (step 6). See `CLAUDE.md` for the full
-plan and `CHANGELOG.md` for what exists today.
+leaderboard (step 5), and optional rule-based bot players (step 6).

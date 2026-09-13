@@ -15,3 +15,5 @@ frontend/coverage/
 .DS_Store
 
 .claude/
+
+CLAUDE.md
