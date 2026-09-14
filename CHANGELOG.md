@@ -197,6 +197,14 @@ has zero knowledge bots exist.
   to name the actual winner (`"<name> won the bid"`/`"<name> won the trick"`) instead of framing
   the message from each viewer's own "you/your team" perspective, since a per-team framing doesn't
   read naturally once the room includes bots.
+- **A bot bid FOUR in diamonds holding no bowers (Q/K/A of diamonds + 1 off-suit ace), then got
+  set to 2 tricks** because the opponent held both bowers and simply beat every one of those
+  "high" diamonds. The original suit-mode scoring credited non-bower trump cards at meaningful
+  value with no regard for whether a bower backed them up. Per the user's correction: without
+  EITHER bower, nothing guards your other trump cards from whoever holds them — a suit-mode bid
+  now caps at THREE with zero bowers, no matter how many of the other 5 ranks (9/10/Q/K/A) or
+  extra off-suit aces the hand holds (`_NO_BOWER_SUIT_BID_CAP` in `bot.py`'s `_suit_option`; the
+  per-card scoring itself is unchanged, only the final rounded estimate gets capped).
 
 ## Table UI polish — team-colored names, per-seat trick count
 - **Player names are now color-coded to their team**, in both an opponent's table seat and the
@@ -219,7 +227,7 @@ has zero knowledge bots exist.
   `build_state_view` as `tricks_won` and consumed by `Table`/`Seat`.
 
 ## Current test coverage
-- Backend: 135 tests (`pytest`), mypy strict clean. Includes a 500-hand fuzz test asserting
+- Backend: 136 tests (`pytest`), mypy strict clean. Includes a 500-hand fuzz test asserting
   `choose_card_to_play` never produces an illegal card, and an end-to-end WebSocket test where a
   lone human plus 3 bots resolve an entire bidding round on their own.
 - Frontend: 44 tests (`vitest`), `tsc` build and `oxlint` clean.

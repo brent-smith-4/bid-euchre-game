@@ -49,6 +49,45 @@ def test_bower_and_ace_hand_bids_a_specific_expected_rung() -> None:
     assert choose_bid(hand, ALL_BIDS, is_first_bidder=False) == BidRung.THREE
 
 
+def test_no_bower_suit_hand_is_capped_at_three_no_matter_how_deep() -> None:
+    """Regression: a bot bid FOUR in diamonds holding Q/K/A of diamonds (no
+    bowers) plus an off-suit ace, then got set to 2 tricks because the
+    opponent held both bowers and simply beat every one of those "high"
+    diamonds. Per the user's correction, ANY suit hand with zero bowers caps
+    at THREE regardless of how many other trump cards (9-10-Q-K-A) or extra
+    off-suit aces it holds - there's no guaranteed control of the suit
+    without at least one bower.
+
+    Not-first-bidder only: holding the suit's own ace (needed to push the
+    RAW suit estimate above THREE pre-cap at all) also feeds the separate,
+    already-validated first-bidder no-trump-HIGH anchor model (2 aces in
+    different suits is independently a real no-trump HIGH hand for a first
+    bidder) - that's correct, unrelated behavior, not something this test
+    should fight with.
+    """
+    three_diamonds_no_bower_plus_ace = [
+        Card(Suit.DIAMONDS, Rank.QUEEN),
+        Card(Suit.DIAMONDS, Rank.KING),
+        Card(Suit.DIAMONDS, Rank.ACE),
+        Card(Suit.CLUBS, Rank.ACE),
+        Card(Suit.HEARTS, Rank.NINE),
+        Card(Suit.SPADES, Rank.NINE),
+    ]
+    assert choose_bid(three_diamonds_no_bower_plus_ace, ALL_BIDS, is_first_bidder=False) == BidRung.THREE
+
+    # Even the deepest possible no-bower suit holding (all 5 other trump
+    # ranks) plus an off-suit ace stays capped at THREE, not FOUR+.
+    all_five_no_bower_plus_ace = [
+        Card(Suit.DIAMONDS, Rank.NINE),
+        Card(Suit.DIAMONDS, Rank.TEN),
+        Card(Suit.DIAMONDS, Rank.QUEEN),
+        Card(Suit.DIAMONDS, Rank.KING),
+        Card(Suit.DIAMONDS, Rank.ACE),
+        Card(Suit.CLUBS, Rank.ACE),
+    ]
+    assert choose_bid(all_five_no_bower_plus_ace, ALL_BIDS, is_first_bidder=False) == BidRung.THREE
+
+
 def test_not_first_bidder_needs_three_anchor_cards_and_is_capped_at_three() -> None:
     # 3 aces plus a matching king: still capped at THREE when not first,
     # regardless of the extra support that would boost a first-bidder's bid.

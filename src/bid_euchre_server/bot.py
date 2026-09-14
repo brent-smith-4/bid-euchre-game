@@ -41,6 +41,16 @@ _SUIT_MOON_MIN_TRICKS = 5.0
 _SUIT_ALONE_MIN_TRUMP_CARDS = 4
 _SUIT_ALONE_MIN_TRICKS = 5.5
 
+# Without EITHER bower, nothing guards the rest of your trump suit from
+# whoever does hold them - right/left bower beat every other card in the
+# suit outright, and it's a coin flip whether they landed with your
+# opponents or your partner. Per the user's own example: holding all 4-5 of
+# the other trump (9/10/Q/K/A) plus even an extra off-suit ace still caps at
+# a 3 bid, no matter how deep the suit runs - confirmed after a live hand
+# where a bot bid 4 on exactly this (Q/K/A of the suit + 1 off-suit ace, no
+# bowers) and got set to 2 tricks because the opponent held both bowers.
+_NO_BOWER_SUIT_BID_CAP = 3
+
 # -- no-trump (HIGH/LOW) estimate: depends on bidding position --------------
 #
 # No-trump has no bowers/trump to fall back on: if you're void in the suit
@@ -110,9 +120,12 @@ def _suit_option(hand: Hand, suit: Suit) -> _BidOption:
     unlocks_moon = (
         has_both_bowers and trump_card_count >= _SUIT_MOON_MIN_TRUMP_CARDS and tricks >= _SUIT_MOON_MIN_TRICKS
     )
+    bid_tricks = math.floor(tricks + 0.5)  # round-half-up onto the shared integer scale
+    if not (has_right or has_left):
+        bid_tricks = min(bid_tricks, _NO_BOWER_SUIT_BID_CAP)
     return _BidOption(
         trump=trump,
-        tricks=math.floor(tricks + 0.5),  # round-half-up onto the shared integer scale
+        tricks=bid_tricks,
         unlocks_moon=unlocks_moon,
         unlocks_alone=unlocks_alone,
     )
