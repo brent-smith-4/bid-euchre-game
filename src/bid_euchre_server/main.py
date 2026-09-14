@@ -51,15 +51,12 @@ def handle_message(active_session: GameSession, player_id: int, message: dict[st
     if msg_type == "bid":
         active_session.submit_bid(player_id, BidRung[message["rung"]])
     elif msg_type == "call_trump":
-        active_session.call_trump(player_id, trump_call_from_json(message))
+        swap_out_card = card_from_json(message["swap_out_card"]) if message.get("swap_out_card") else None
+        active_session.call_trump(player_id, trump_call_from_json(message), swap_out_card)
+    elif msg_type == "submit_moon_swap_card":
+        active_session.submit_moon_swap_card(player_id, card_from_json(message["card"]))
     elif msg_type == "play_card":
         active_session.play_card(player_id, card_from_json(message["card"]))
-    elif msg_type == "swap_moon_card":
-        active_session.swap_moon_card(
-            player_id,
-            card_from_json(message["card_from_bidder"]),
-            card_from_json(message["card_from_partner"]),
-        )
     else:
         raise ValueError(f"unknown message type: {msg_type!r}")
 

@@ -21,6 +21,7 @@ function makeState(overrides: Partial<StateView>): StateView {
     target_score: 52,
     bidder_turn: null,
     player_turn: null,
+    moon_swap_turn: null,
     legal_bids: [],
     legal_plays: [],
     teams: { 0: { color: "#3366cc", name: null }, 1: { color: "#cc3333", name: null } },

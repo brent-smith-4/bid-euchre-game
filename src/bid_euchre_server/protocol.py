@@ -85,6 +85,7 @@ def build_state_view(session: GameSession, viewer_id: int, teams: dict[int, Team
         "target_score": session.target_score,
         "bidder_turn": session.bidder_turn,
         "player_turn": session.player_turn,
+        "moon_swap_turn": session.moon_swap_turn,
         "legal_bids": (
             [rung.name for rung in session.legal_bids] if session.bidder_turn == viewer_id else []
         ),

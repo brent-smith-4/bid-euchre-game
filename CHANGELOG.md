@@ -49,10 +49,9 @@ client-rendered real-time screen (revisited in step 4, see below).
 - Players display as call signs (Alpha/Bravo/Charlie/Delta) instead of raw ids — cosmetic only,
   turn logic still keys off the numeric `player_id`.
 
-**Known gap, deliberately deferred:** the shoot-the-moon card swap needs a two-phase blind-submit
-protocol (`session.swap_moon_card` currently expects the bidder to already know the partner's
-card value, which the wire protocol never actually reveals to them). MOON bids still play
-through to completion; the swap step just isn't offered in the UI yet.
+**Known gap at the time, resolved in step 4 (see below):** the shoot-the-moon card swap needed a
+two-phase blind-submit protocol (`session.swap_moon_card` originally expected the bidder to
+already know the partner's card value, which the wire protocol never actually revealed to them).
 
 ## Step 4 — Room-code based lobbies
 
@@ -100,9 +99,29 @@ Replaced the single global game with many isolated, concurrent rooms.
   delivery to everyone else. Now a failed send self-heals (disconnects that seat) instead of
   breaking the loop.
 
+## Shoot-the-moon card swap
+
+Resolved the step 3 gap with a mandatory, fully blind two-phase protocol, per design decisions
+made with the user:
+
+- **Mandatory, not optional** — a MOON bid always includes the swap; skipping it would make MOON
+  functionally indistinguishable from ALONE at half the points.
+- **Fully blind** — neither side ever learns which card the other contributed, even after the
+  trade completes.
+- `GameSession.call_trump` now takes a required `swap_out_card` for MOON bids (rejected for any
+  other bid), stores it in a session-internal field never serialized to any client, and enters a
+  new `Phase.MOON_SWAP` instead of going straight to `PLAYING`. A new `submit_moon_swap_card`
+  method (only callable by the bidder's partner) performs the actual exchange and resumes play.
+  A `moon_swap_turn` property (mirroring `bidder_turn`/`player_turn`) tells clients WHO needs to
+  act, never WHICH card is involved.
+- Frontend: `TrumpCallPanel` now requires picking a card alongside suit/high/low for MOON bids
+  (a "Confirm" step); a new `MoonSwapPanel` handles the partner's response.
+- `test_main.py::test_moon_swap_stays_blind_over_the_wire` exercises the full round-trip and
+  asserts the swap card never appears in any payload but the two participants' own hands.
+
 ## Current test coverage
-- Backend: 109 tests (`pytest`), mypy strict clean.
-- Frontend: 29 tests (`vitest`), `tsc` build and `oxlint` clean.
+- Backend: 116 tests (`pytest`), mypy strict clean.
+- Frontend: 35 tests (`vitest`), `tsc` build and `oxlint` clean.
 
 ## Not yet built (per CLAUDE.md's remaining build order)
 - Step 5: Discord OAuth2 + persistent Postgres (accounts, game history, leaderboard).

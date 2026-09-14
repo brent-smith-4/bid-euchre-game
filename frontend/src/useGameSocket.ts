@@ -14,7 +14,8 @@ export interface GameSocket {
   state: StateView | null;
   error: string | null;
   sendBid: (rung: BidRung) => void;
-  sendCallTrump: (mode: TrumpMode, suit: Suit | null) => void;
+  sendCallTrump: (mode: TrumpMode, suit: Suit | null, swapOutCard: Card | null) => void;
+  sendSubmitMoonSwapCard: (card: Card) => void;
   sendPlayCard: (card: Card) => void;
   sendSwapTeam: (withPlayerId: number) => void;
   sendSetTeamColor: (team: number, color: string) => void;
@@ -82,7 +83,12 @@ export function useGameSocket(roomCode: string | null): GameSocket {
 
   const sendBid = useCallback((rung: BidRung) => send({ type: "bid", rung }), [send]);
   const sendCallTrump = useCallback(
-    (mode: TrumpMode, suit: Suit | null) => send({ type: "call_trump", mode, suit }),
+    (mode: TrumpMode, suit: Suit | null, swapOutCard: Card | null) =>
+      send({ type: "call_trump", mode, suit, swap_out_card: swapOutCard }),
+    [send],
+  );
+  const sendSubmitMoonSwapCard = useCallback(
+    (card: Card) => send({ type: "submit_moon_swap_card", card }),
     [send],
   );
   const sendPlayCard = useCallback((card: Card) => send({ type: "play_card", card }), [send]);
@@ -113,6 +119,7 @@ export function useGameSocket(roomCode: string | null): GameSocket {
     error,
     sendBid,
     sendCallTrump,
+    sendSubmitMoonSwapCard,
     sendPlayCard,
     sendSwapTeam,
     sendSetTeamColor,

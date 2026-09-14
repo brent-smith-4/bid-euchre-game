@@ -278,6 +278,12 @@ button.playing-card:hover:not(:disabled) {
   cursor: not-allowed;
 }
 
+.playing-card.selected {
+  border: 2px solid var(--accent);
+  transform: translateY(-4px);
+  box-shadow: 0 0 0 2px var(--accent-bg, #fff6e0);
+}
+
 /* -- panels -------------------------------------------------------------- */
 
 .bidding-panel,
@@ -341,6 +347,33 @@ button.playing-card:hover:not(:disabled) {
 
 .bid-legend {
   opacity: 0.8;
+}
+
+.trump-buttons button.selected {
+  border-color: var(--accent);
+  background: var(--accent-bg, #fff6e0);
+}
+
+.moon-swap-pick,
+.moon-swap-panel {
+  text-align: center;
+  max-width: 32rem;
+  margin: 0.5rem auto 0;
+}
+
+.moon-swap-panel.waiting {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.moon-swap-pick p,
+.moon-swap-panel p {
+  font-size: 0.9rem;
+}
+
+.moon-swap-pick .hand,
+.moon-swap-panel .hand {
+  margin-bottom: 0.5rem;
 }
 
 /* -- game over / errors --------------------------------------------------- */

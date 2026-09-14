@@ -32,7 +32,7 @@ export interface TrickPlay {
   card: Card;
 }
 
-export type Phase = "BIDDING" | "CALLING_TRUMP" | "PLAYING" | "GAME_OVER";
+export type Phase = "BIDDING" | "CALLING_TRUMP" | "MOON_SWAP" | "PLAYING" | "GAME_OVER";
 
 export interface TeamMeta {
   color: string;
@@ -61,6 +61,7 @@ export interface StateView {
   target_score: number;
   bidder_turn: number | null;
   player_turn: number | null;
+  moon_swap_turn: number | null;
   legal_bids: BidRung[];
   legal_plays: Card[];
   teams: Record<number, TeamMeta>;
@@ -92,7 +93,8 @@ export type ServerMessage = StateView | LobbyState | AssignedSeatMessage | Error
 
 export type ClientMessage =
   | { type: "bid"; rung: BidRung }
-  | { type: "call_trump"; mode: TrumpMode; suit: Suit | null }
+  | { type: "call_trump"; mode: TrumpMode; suit: Suit | null; swap_out_card: Card | null }
+  | { type: "submit_moon_swap_card"; card: Card }
   | { type: "play_card"; card: Card }
   | { type: "swap_team"; with_player_id: number }
   | { type: "set_team_color"; team: number; color: string }

@@ -25,6 +25,7 @@ from bid_euchre.models import (
     HandState,
     TrickPlay,
     TrumpCall,
+    partner_of,
     team_of,
 )
 from bid_euchre.ranking import effective_suit
@@ -36,6 +37,7 @@ from bid_euchre.trick import legal_plays as compute_legal_plays
 class Phase(Enum):
     BIDDING = auto()
     CALLING_TRUMP = auto()
+    MOON_SWAP = auto()
     PLAYING = auto()
     GAME_OVER = auto()
 
@@ -52,6 +54,10 @@ class GameSession:
         self._trick_order: list[int] = []
         self._trick_turn_index = 0
         self._last_trick_winner: int | None = None
+        # The bidder's chosen outgoing card, held here (never serialized to
+        # any client) from call_trump until the partner responds in
+        # submit_moon_swap_card - this is what keeps the swap blind.
+        self._pending_moon_swap_card: Card | None = None
 
     # -- read-only views for the networking layer -------------------------
 
@@ -66,6 +72,17 @@ class GameSession:
         if self.phase is not Phase.PLAYING:
             return None
         return self._trick_order[self._trick_turn_index]
+
+    @property
+    def moon_swap_turn(self) -> int | None:
+        """The bidder's partner's id while waiting on their moon-swap card,
+        or None outside that phase. Only ever tells clients WHO needs to
+        act, never WHICH card is involved - that stays server-side only.
+        """
+        if self.phase is not Phase.MOON_SWAP:
+            return None
+        assert self.state.winning_bid is not None
+        return partner_of(self.state.winning_bid.player_id)
 
     @property
     def last_trick_winner(self) -> int | None:
@@ -139,9 +156,17 @@ class GameSession:
             assert self.state.winning_bid is not None
             self.phase = Phase.CALLING_TRUMP
 
-    # -- trump call -----------------------------------------------------
+    # -- trump call / moon swap ------------------------------------------
 
-    def call_trump(self, player_id: int, trump: TrumpCall) -> None:
+    def call_trump(self, player_id: int, trump: TrumpCall, swap_out_card: Card | None = None) -> None:
+        """Call trump. A MOON bid mandatorily also names the card the bidder
+        is giving away in the swap (swap_out_card) - the swap is what
+        distinguishes MOON from ALONE (both commit to all 6 tricks, but only
+        MOON lets the team reshuffle a card first), so it isn't optional.
+        The partner's return card isn't collected here - see
+        submit_moon_swap_card - so neither side ever learns the other's
+        card until after the trade.
+        """
         if self.phase is not Phase.CALLING_TRUMP:
             raise ValueError("not in the trump-calling phase")
 
@@ -150,7 +175,43 @@ class GameSession:
         if player_id != winning_bid.player_id:
             raise ValueError("only the bid winner calls trump")
 
+        is_moon = winning_bid.rung is BidRung.MOON
+        if is_moon and swap_out_card is None:
+            raise ValueError("a MOON bid requires choosing a card to swap")
+        if not is_moon and swap_out_card is not None:
+            raise ValueError("only a MOON bid uses a card swap")
+        if swap_out_card is not None and swap_out_card not in self.state.hands[player_id]:
+            raise ValueError("card not in hand")
+
         self.state.trump = trump
+
+        if is_moon:
+            self._pending_moon_swap_card = swap_out_card
+            self.phase = Phase.MOON_SWAP
+            return
+
+        self._begin_trick_play(winning_bid)
+
+    def submit_moon_swap_card(self, player_id: int, card: Card) -> None:
+        if self.phase is not Phase.MOON_SWAP:
+            raise ValueError("not waiting on a moon swap")
+
+        winning_bid = self.state.winning_bid
+        assert winning_bid is not None
+        partner_id = partner_of(winning_bid.player_id)
+        if player_id != partner_id:
+            raise ValueError("only the bidder's partner submits the swap card")
+        if card not in self.state.hands[partner_id]:
+            raise ValueError("card not in hand")
+
+        bidder_card = self._pending_moon_swap_card
+        assert bidder_card is not None
+        swap_moon_card(self.state, bidder_card, card)
+        self._pending_moon_swap_card = None
+
+        self._begin_trick_play(winning_bid)
+
+    def _begin_trick_play(self, winning_bid: Bid) -> None:
         self._tricks_won = {TEAM_A: 0, TEAM_B: 0}
         self._last_trick_winner = None
         # The first trick is led by the player left of the dealer - the same
@@ -161,19 +222,6 @@ class GameSession:
         self._trick_order = trick_play_order(self._bid_order[0], winning_bid)
         self._trick_turn_index = 0
         self.phase = Phase.PLAYING
-
-    def swap_moon_card(self, player_id: int, card_from_bidder: Card, card_from_partner: Card) -> None:
-        if self.phase is not Phase.PLAYING:
-            raise ValueError("can only swap after trump is called")
-        if self.state.tricks or self.state.current_trick:
-            raise ValueError("the moon swap must happen before the first trick")
-
-        winning_bid = self.state.winning_bid
-        assert winning_bid is not None
-        if player_id != winning_bid.player_id:
-            raise ValueError("only the bidder can initiate the moon swap")
-
-        swap_moon_card(self.state, card_from_bidder, card_from_partner)
 
     # -- trick play -----------------------------------------------------
 

@@ -274,28 +274,106 @@ def test_left_of_dealer_leads_first_trick_even_when_not_the_bid_winner() -> None
     assert session.player_turn != 2  # not the bid winner
 
 
-def test_moon_swap_allowed_before_first_trick_then_locked_out() -> None:
-    session = GameSession()
+def _bid_moon_and_win(session: GameSession) -> int:
+    """Bid MOON as the first bidder (everyone else passes) and return the
+    bidder's id, leaving the session in CALLING_TRUMP.
+    """
     bidder_id = session.bidder_turn
     assert bidder_id is not None
-
     session.submit_bid(bidder_id, BidRung.MOON)
     for _ in range(3):
         turn = session.bidder_turn
         assert turn is not None
         session.submit_bid(turn, BidRung.PASS)
+    return bidder_id
 
-    session.call_trump(bidder_id, TrumpCall(mode=TrumpMode.HIGH))
 
-    partner_id = partner_of(bidder_id)
-    bidder_card = session.state.hands[bidder_id][0]
-    partner_card = session.state.hands[partner_id][0]
-    session.swap_moon_card(bidder_id, bidder_card, partner_card)
-    assert partner_card in session.state.hands[bidder_id]
-
-    _play_current_players_first_legal_card(session)
+def test_moon_bid_requires_a_swap_card_when_calling_trump() -> None:
+    session = GameSession()
+    bidder_id = _bid_moon_and_win(session)
 
     with pytest.raises(ValueError):
-        session.swap_moon_card(
-            bidder_id, session.state.hands[bidder_id][0], session.state.hands[partner_id][0]
+        session.call_trump(bidder_id, TrumpCall(mode=TrumpMode.HIGH))
+
+
+def test_non_moon_bid_rejects_a_swap_card() -> None:
+    session = GameSession()
+    dealer_id = _pass_first_three(session)
+    session.submit_bid(dealer_id, BidRung.THREE)
+
+    with pytest.raises(ValueError):
+        session.call_trump(
+            dealer_id, TrumpCall(mode=TrumpMode.HIGH), swap_out_card=session.state.hands[dealer_id][0]
         )
+
+
+def test_bidder_swap_card_must_be_in_bidders_own_hand() -> None:
+    session = GameSession()
+    bidder_id = _bid_moon_and_win(session)
+    partner_id = partner_of(bidder_id)
+    other_players_card = session.state.hands[partner_id][0]
+
+    with pytest.raises(ValueError):
+        session.call_trump(bidder_id, TrumpCall(mode=TrumpMode.HIGH), swap_out_card=other_players_card)
+
+
+def test_moon_swap_full_flow_stays_blind_and_transitions_to_playing() -> None:
+    session = GameSession()
+    bidder_id = _bid_moon_and_win(session)
+    partner_id = partner_of(bidder_id)
+    bidder_card = session.state.hands[bidder_id][0]
+
+    session.call_trump(bidder_id, TrumpCall(mode=TrumpMode.HIGH), swap_out_card=bidder_card)
+
+    assert session.phase is Phase.MOON_SWAP
+    assert session.moon_swap_turn == partner_id
+    # The bidder's card already left their hand's *logical* ownership, but
+    # nothing about it (or who it belongs to) is exposed anywhere client-
+    # visible - GameSession simply has no getter that reveals it.
+    assert bidder_card in session.state.hands[bidder_id]  # not removed yet - swap isn't final
+
+    partner_card = session.state.hands[partner_id][0]
+    session.submit_moon_swap_card(partner_id, partner_card)
+
+    assert session.phase is Phase.PLAYING
+    assert session.moon_swap_turn is None
+    assert partner_card in session.state.hands[bidder_id]
+    assert bidder_card in session.state.hands[partner_id]
+    assert bidder_card not in session.state.hands[bidder_id]
+    assert partner_card not in session.state.hands[partner_id]
+
+
+def test_only_the_bidders_partner_may_submit_the_moon_swap_card() -> None:
+    session = GameSession()
+    bidder_id = _bid_moon_and_win(session)
+    partner_id = partner_of(bidder_id)
+    session.call_trump(bidder_id, TrumpCall(mode=TrumpMode.HIGH), swap_out_card=session.state.hands[bidder_id][0])
+
+    with pytest.raises(ValueError):
+        session.submit_moon_swap_card(bidder_id, session.state.hands[bidder_id][0])
+
+    not_partner = next(p for p in range(4) if p not in (bidder_id, partner_id))
+    with pytest.raises(ValueError):
+        session.submit_moon_swap_card(not_partner, session.state.hands[not_partner][0])
+
+
+def test_moon_swap_card_must_be_in_partners_own_hand() -> None:
+    session = GameSession()
+    bidder_id = _bid_moon_and_win(session)
+    partner_id = partner_of(bidder_id)
+    session.call_trump(bidder_id, TrumpCall(mode=TrumpMode.HIGH), swap_out_card=session.state.hands[bidder_id][0])
+
+    with pytest.raises(ValueError):
+        session.submit_moon_swap_card(partner_id, session.state.hands[bidder_id][0])
+
+
+def test_moon_swap_turn_is_none_outside_the_moon_swap_phase() -> None:
+    session = GameSession()
+    assert session.moon_swap_turn is None  # BIDDING
+
+    dealer_id = _pass_first_three(session)
+    session.submit_bid(dealer_id, BidRung.THREE)
+    assert session.moon_swap_turn is None  # CALLING_TRUMP, non-moon bid
+
+    session.call_trump(dealer_id, TrumpCall(mode=TrumpMode.HIGH))
+    assert session.moon_swap_turn is None  # PLAYING

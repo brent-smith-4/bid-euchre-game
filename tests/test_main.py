@@ -264,6 +264,69 @@ def test_bidding_and_trump_call_broadcast_over_websockets() -> None:
         assert states[0]["last_trick_winner"] == states[1]["last_trick_winner"]
 
 
+def test_moon_swap_stays_blind_over_the_wire() -> None:
+    client = TestClient(main_module.app)
+    code = _create_room(client)
+    with (
+        client.websocket_connect(f"/ws/{code}") as ws0,
+        client.websocket_connect(f"/ws/{code}") as ws1,
+        client.websocket_connect(f"/ws/{code}") as ws2,
+        client.websocket_connect(f"/ws/{code}") as ws3,
+    ):
+        sockets = [ws0, ws1, ws2, ws3]
+        _join_and_start_game(client, code, sockets)
+
+        # dealer is player 0 -> bid order [1, 2, 3, 0]; player 1 bids MOON
+        # and everyone else passes, so player 1 (team B) wins with partner
+        # player 3 (partner_of(1) == 3, since teams are {0,2} and {1,3}).
+        ws1.send_json({"type": "bid", "rung": "MOON"})
+        _drain_all(sockets, 1)
+        for ws in (ws2, ws3, ws0):
+            ws.send_json({"type": "bid", "rung": "PASS"})
+            _drain_all(sockets, 1)
+
+        room = main_module.registry.get(code)
+        assert room is not None and room.session is not None
+        bidder_card = room.session.state.hands[1][0]
+
+        # a MOON bid can't skip the swap card...
+        ws1.send_json({"type": "call_trump", "mode": "HIGH"})
+        error = ws1.receive_json()
+        assert error["type"] == "error"
+
+        # ...but naming one moves the room into MOON_SWAP, waiting on partner 3.
+        ws1.send_json({"type": "call_trump", "mode": "HIGH", "swap_out_card": card_to_json(bidder_card)})
+        states = _drain_all(sockets, 1)
+        assert states[0]["phase"] == "MOON_SWAP"
+        assert states[0]["moon_swap_turn"] == 3
+
+        # nobody but the bidder ever sees the bidder's card in their own hand.
+        bidder_card_json = card_to_json(bidder_card)
+        assert bidder_card_json == states[1]["your_hand"][0]
+        assert bidder_card_json not in states[0]["your_hand"]
+        assert bidder_card_json not in states[2]["your_hand"]
+        assert bidder_card_json not in states[3]["your_hand"]
+        # and the payload never carries the card under any other key either -
+        # the only place a Card-shaped dict can legitimately appear for a
+        # non-participant is inside their own your_hand/current_trick.
+        assert "swap_out_card" not in states[0]
+        assert "pending_moon_swap_card" not in states[0]
+
+        # only the partner (player 3) may respond, with a card from their own hand.
+        ws0.send_json({"type": "submit_moon_swap_card", "card": card_to_json(bidder_card)})
+        error = ws0.receive_json()
+        assert error["type"] == "error"
+
+        partner_card = room.session.state.hands[3][0]
+        ws3.send_json({"type": "submit_moon_swap_card", "card": card_to_json(partner_card)})
+        states = _drain_all(sockets, 1)
+
+        assert states[0]["phase"] == "PLAYING"
+        assert states[0]["moon_swap_turn"] is None
+        assert card_to_json(partner_card) in states[1]["your_hand"]  # bidder received partner's card
+        assert bidder_card_json in states[3]["your_hand"]  # partner received bidder's card
+
+
 def test_disconnect_during_game_frees_seat_for_rejoin() -> None:
     """Player 1 needs to disconnect mid-game while players 0, 2, 3 stay
     connected (so the room survives - an empty room gets cleaned up

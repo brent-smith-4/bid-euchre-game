@@ -2,6 +2,7 @@ import { BiddingPanel } from "./BiddingPanel";
 import { GameOverScreen } from "./GameOverScreen";
 import { Hand } from "./Hand";
 import { Lobby } from "./Lobby";
+import { MoonSwapPanel } from "./MoonSwapPanel";
 import { ScoreBoard } from "./ScoreBoard";
 import { Table } from "./Table";
 import { Toast } from "./Toast";
@@ -23,6 +24,7 @@ export function GameRoom({ roomCode }: GameRoomProps) {
     error,
     sendBid,
     sendCallTrump,
+    sendSubmitMoonSwapCard,
     sendPlayCard,
     sendSwapTeam,
     sendSetTeamColor,
@@ -65,6 +67,13 @@ export function GameRoom({ roomCode }: GameRoomProps) {
   const isYourBidTurn = state.bidder_turn === yourPlayerId;
   const isYourPlayTurn = state.player_turn === yourPlayerId;
   const isBidWinner = state.winning_bid?.player_id === yourPlayerId;
+  const isMoonBid = state.winning_bid?.rung === "MOON";
+  const isYourMoonSwapTurn = state.moon_swap_turn === yourPlayerId;
+  // Hide the generic hand display while TrumpCallPanel/MoonSwapPanel are
+  // already showing an interactive card-picker for this viewer, so the
+  // same cards don't render twice on screen.
+  const hideGenericHand =
+    state.phase === "MOON_SWAP" || (state.phase === "CALLING_TRUMP" && isMoonBid && isBidWinner);
 
   return (
     <div className="app">
@@ -102,15 +111,30 @@ export function GameRoom({ roomCode }: GameRoomProps) {
             <BiddingPanel yourTurn={isYourBidTurn} legalBids={state.legal_bids} onBid={sendBid} />
           )}
           {state.phase === "CALLING_TRUMP" && (
-            <TrumpCallPanel isBidWinner={isBidWinner} onCallTrump={sendCallTrump} />
+            <TrumpCallPanel
+              isBidWinner={isBidWinner}
+              isMoonBid={isMoonBid}
+              yourHand={state.your_hand}
+              onCallTrump={sendCallTrump}
+            />
+          )}
+          {state.phase === "MOON_SWAP" && (
+            <MoonSwapPanel
+              isYourTurn={isYourMoonSwapTurn}
+              isBidder={isBidWinner}
+              yourHand={state.your_hand}
+              onSubmitSwapCard={sendSubmitMoonSwapCard}
+            />
           )}
 
-          <Hand
-            cards={state.your_hand}
-            yourTurn={state.phase === "PLAYING" && isYourPlayTurn}
-            legalPlays={state.legal_plays}
-            onPlay={sendPlayCard}
-          />
+          {!hideGenericHand && (
+            <Hand
+              cards={state.your_hand}
+              yourTurn={state.phase === "PLAYING" && isYourPlayTurn}
+              legalPlays={state.legal_plays}
+              onPlay={sendPlayCard}
+            />
+          )}
         </>
       )}
 
