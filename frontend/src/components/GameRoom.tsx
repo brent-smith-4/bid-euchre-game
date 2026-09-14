@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { BiddingPanel } from "./BiddingPanel";
 import { GameOverScreen } from "./GameOverScreen";
 import { Hand } from "./Hand";
@@ -7,9 +8,10 @@ import { ScoreBoard } from "./ScoreBoard";
 import { Table } from "./Table";
 import { Toast } from "./Toast";
 import { TrumpCallPanel } from "./TrumpCallPanel";
-import { bidLabel, playerName, suitSymbol } from "../protocol";
+import { bidLabel, playerColor, playerName, suitSymbol } from "../protocol";
 import { useGameSocket } from "../useGameSocket";
 import { useRoundBanner } from "../useRoundBanner";
+import { useTrickDisplay } from "../useTrickDisplay";
 
 interface GameRoomProps {
   roomCode: string;
@@ -31,9 +33,27 @@ export function GameRoom({ roomCode }: GameRoomProps) {
     sendSetTeamName,
     sendSetTargetScore,
     sendStartGame,
+    sendAddBot,
+    sendRemoveBot,
     dismissError,
   } = useGameSocket(roomCode);
-  const roundBanner = useRoundBanner(state, yourPlayerId);
+  const roundBanner = useRoundBanner(state);
+  const displayedTrick = useTrickDisplay(state);
+  const bannerWinnerId = roundBanner.winnerId;
+  const bannerEvent = roundBanner.event;
+  const bannerColor =
+    bannerWinnerId !== null && state !== null ? playerColor(state.teams, bannerWinnerId) : null;
+  // Memoized so the Toast's auto-dismiss timer (keyed on message identity)
+  // doesn't reset on every unrelated state broadcast - only when the
+  // winner/event this banner is announcing actually changes.
+  const roundBannerMessage = useMemo(() => {
+    if (bannerWinnerId === null || bannerEvent === null || bannerColor === null) return null;
+    return (
+      <>
+        <span style={{ color: bannerColor }}>{playerName(bannerWinnerId)}</span> won the {bannerEvent}
+      </>
+    );
+  }, [bannerWinnerId, bannerEvent, bannerColor]);
 
   if (status === "not_found") {
     return <div className="status-screen">Room not found — check the code and try again.</div>;
@@ -59,6 +79,8 @@ export function GameRoom({ roomCode }: GameRoomProps) {
         onSetTeamName={sendSetTeamName}
         onSetTargetScore={sendSetTargetScore}
         onStartGame={sendStartGame}
+        onAddBot={sendAddBot}
+        onRemoveBot={sendRemoveBot}
       />
     );
   }
@@ -92,7 +114,7 @@ export function GameRoom({ roomCode }: GameRoomProps) {
         <GameOverScreen scores={state.scores} yourTeam={yourTeam} />
       ) : (
         <>
-          <Table state={state} yourPlayerId={yourPlayerId} />
+          <Table state={state} yourPlayerId={yourPlayerId} displayedTrick={displayedTrick} />
 
           <div className="trump-indicator">
             {state.trump && (
@@ -138,7 +160,7 @@ export function GameRoom({ roomCode }: GameRoomProps) {
         </>
       )}
 
-      <Toast message={roundBanner.message} onDismiss={roundBanner.dismiss} variant="info" />
+      <Toast message={roundBannerMessage} onDismiss={roundBanner.dismiss} variant="info" />
       <Toast message={error} onDismiss={dismissError} variant="error" />
     </div>
   );

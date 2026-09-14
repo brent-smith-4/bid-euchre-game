@@ -22,6 +22,8 @@ export interface GameSocket {
   sendSetTeamName: (team: number, name: string) => void;
   sendSetTargetScore: (value: number) => void;
   sendStartGame: () => void;
+  sendAddBot: () => void;
+  sendRemoveBot: (botId: number) => void;
   dismissError: () => void;
 }
 
@@ -109,6 +111,8 @@ export function useGameSocket(roomCode: string | null): GameSocket {
     [send],
   );
   const sendStartGame = useCallback(() => send({ type: "start_game" }), [send]);
+  const sendAddBot = useCallback(() => send({ type: "add_bot" }), [send]);
+  const sendRemoveBot = useCallback((botId: number) => send({ type: "remove_bot", bot_id: botId }), [send]);
   const dismissError = useCallback(() => setError(null), []);
 
   return {
@@ -126,6 +130,8 @@ export function useGameSocket(roomCode: string | null): GameSocket {
     sendSetTeamName,
     sendSetTargetScore,
     sendStartGame,
+    sendAddBot,
+    sendRemoveBot,
     dismissError,
   };
 }

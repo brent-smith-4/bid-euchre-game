@@ -14,7 +14,10 @@ import secrets
 from dataclasses import dataclass
 from enum import Enum, auto
 
-from bid_euchre_server.connection_manager import ConnectionManager
+from fastapi import WebSocket
+
+from bid_euchre.models import NUM_PLAYERS
+from bid_euchre_server.connection_manager import ConnectionManager, GameFullError
 from bid_euchre_server.session import GameSession
 
 _CODE_CHARSET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # excludes 0/O, 1/I/L - unambiguous by eye
@@ -51,8 +54,15 @@ class Room:
         self.target_score = 52
         self.session: GameSession | None = None
         # Fixed once start_game() runs: lobby seat (connection order) -> the
-        # GameSession player_id that seat actually plays as.
+        # GameSession player_id that seat actually plays as, and its reverse
+        # (used to check whether the CURRENT game turn belongs to a bot).
         self.lobby_to_game: dict[int, int] = {}
+        self.game_to_lobby: dict[int, int] = {}
+        # Lobby seats occupied by a bot instead of a live WebSocket - never
+        # appear in `self.connections`, so they don't count as "connected"
+        # for host_id/rejoin purposes, but DO count as occupied seats for
+        # seat-assignment and team balance, same as a human.
+        self.bot_ids: set[int] = set()
 
     # -- read-only views ---------------------------------------------------
 
@@ -62,10 +72,21 @@ class Room:
         return min(connected) if connected else None
 
     def naming_rights_holder(self, team: int) -> int | None:
-        members = [p for p, t in self.player_team.items() if t == team]
+        members = [p for p, t in self.player_team.items() if t == team and p not in self.bot_ids]
         return min(members) if members else None
 
     # -- joining -------------------------------------------------------------
+
+    def assign_seat(self, websocket: WebSocket) -> int:
+        """Give a new WebSocket connection the lowest lobby seat not already
+        occupied by either a live connection or a bot.
+        """
+        occupied = set(self.connections.connected_player_ids()) | self.bot_ids
+        for player_id in range(NUM_PLAYERS):
+            if player_id not in occupied:
+                self.connections.occupy(player_id, websocket)
+                return player_id
+        raise GameFullError("all 4 seats are taken")
 
     def auto_balance_new_player(self, player_id: int) -> None:
         team_a_count = sum(1 for t in self.player_team.values() if t == TEAM_A)
@@ -74,6 +95,28 @@ class Room:
 
     def forget_player(self, player_id: int) -> None:
         self.player_team.pop(player_id, None)
+
+    def add_bot(self, requester_id: int) -> int:
+        self._require_lobby()
+        if requester_id != self.host_id:
+            raise ValueError("only the host may add a bot")
+
+        occupied = set(self.connections.connected_player_ids()) | self.bot_ids
+        for player_id in range(NUM_PLAYERS):
+            if player_id not in occupied:
+                self.bot_ids.add(player_id)
+                self.auto_balance_new_player(player_id)
+                return player_id
+        raise ValueError("room is full")
+
+    def remove_bot(self, requester_id: int, bot_id: int) -> None:
+        self._require_lobby()
+        if requester_id != self.host_id:
+            raise ValueError("only the host may remove a bot")
+        if bot_id not in self.bot_ids:
+            raise ValueError("that seat isn't a bot")
+        self.bot_ids.discard(bot_id)
+        self.forget_player(bot_id)
 
     # -- lobby actions -------------------------------------------------------
 
@@ -137,6 +180,7 @@ class Room:
             team_b[0]: 1,
             team_b[1]: 3,
         }
+        self.game_to_lobby = {game_id: lobby_id for lobby_id, game_id in self.lobby_to_game.items()}
         self.session = GameSession(target_score=self.target_score, first_dealer_id=0)
         self.status = RoomStatus.IN_GAME
 

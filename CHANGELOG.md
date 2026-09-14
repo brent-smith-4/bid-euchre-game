@@ -1,6 +1,7 @@
 # Changelog
 
-Tracks what's been built against CLAUDE.md's build order. Steps 1-4 are done.
+Tracks what's been built against CLAUDE.md's build order. Steps 1-4 and 6 are done — step 5
+(Discord OAuth2 + Postgres accounts/history/leaderboard) was deliberately skipped; see below.
 
 ## Step 1 — Core rules engine (`src/bid_euchre/`)
 
@@ -44,8 +45,10 @@ client-rendered real-time screen (revisited in step 4, see below).
   `GameOverScreen`.
 - Server additions to support the UI without duplicating rules in JS: `GameSession.legal_bids` /
   `legal_plays` properties, threaded into `build_state_view`.
-- `useRoundBanner` — diffs consecutive states to announce "You won/lost the bid!" and "Your
-  team won/lost the trick!" (bid outcome is per-player, trick outcome is per-team).
+- `useRoundBanner` — diffs consecutive states to announce who won the bid and who won the
+  trick. (Originally framed per-viewer as "You won/lost the bid!"/"Your team won/lost the
+  trick!"; changed to a plain `"<name> won the bid"`/`"<name> won the trick"` format during the
+  step 6 bot-pacing polish — see below.)
 - Players display as call signs (Alpha/Bravo/Charlie/Delta) instead of raw ids — cosmetic only,
   turn logic still keys off the numeric `player_id`.
 
@@ -119,11 +122,107 @@ made with the user:
 - `test_main.py::test_moon_swap_stays_blind_over_the_wire` exercises the full round-trip and
   asserts the swap card never appears in any payload but the two participants' own hands.
 
-## Current test coverage
-- Backend: 116 tests (`pytest`), mypy strict clean.
-- Frontend: 35 tests (`vitest`), `tsc` build and `oxlint` clean.
+## Step 5 — skipped
 
-## Not yet built (per CLAUDE.md's remaining build order)
-- Step 5: Discord OAuth2 + persistent Postgres (accounts, game history, leaderboard).
-- Step 6 (optional/later): rule-based bot players.
-- Out of scope for now: public lobby browser, Discord-native friend invites, ML-based bots, P2P/WebRTC.
+Discord OAuth2 + persistent Postgres (accounts, game history, leaderboard) was deliberately
+skipped rather than deferred. The project's actual goal — playing with friends online — was
+already fully achieved by step 4 without any accounts; the only things step 5 would add
+(persistent history, a leaderboard) are bragging-rights nice-to-haves, not the "easy 20%" CLAUDE.md
+frames them as being load-bearing for. Judged low-ROI for the DS/MLE/AIE/SWE roles this portfolio
+targets — real-time sync, a non-trivial rules engine, and server authority already demonstrate the
+differentiated signal step 5 wouldn't meaningfully add to.
+
+## Step 6 — Rule-based bot players (`src/bid_euchre_server/bot.py`)
+
+No training data, no learned models, no RL — pure heuristics reusing the existing rules-engine
+functions (`is_right_bower`/`is_left_bower`/`card_rank_value`/`determine_trick_winner`) rather
+than re-deriving any of them. A bot is just another `player_id` taking its turn through the exact
+same `GameSession` methods a human's WebSocket handler calls — `bid_euchre` (the rules engine)
+has zero knowledge bots exist.
+
+- **`choose_bid`** — estimates trick-taking strength per candidate suit (bowers/trump depth, same
+  idea as the moon-swap card ranking) and separately for no-trump HIGH/LOW, where the model is
+  materially different: no-trump has no bowers to fall back on, so the only reliable way to win a
+  trick is holding the single best card for that suit under the mode's ordering (the "anchor" —
+  ACE for HIGH, NINE for LOW). Scoring is **bid-position dependent**: the player left of the
+  dealer bids first *and* leads the first trick if they win (existing rule from step 4), so only
+  that seat can guarantee *when* a suit gets played by leading it themselves — anyone else needs a
+  much blunter signal (3+ of the single best card, capped at a bid of THREE) since they have no
+  control over the lead. MOON/ALONE are rare, gated on genuinely dominant hands, and only reachable
+  by the first bidder.
+- **`choose_trump`** — reuses the same per-suit/no-trump scoring `choose_bid` already computed.
+- **`choose_moon_swap_card`** — trump-aware (`card_rank_value`), and deliberately diverges by
+  role: as the bidder, gives away the *weakest* card (keeps strength for their own hand); as the
+  partner, gives away the *strongest* (the swap's whole point is helping the bidder sweep all 6).
+- **`choose_card_to_play`** — never reimplements follow-suit (only ever chooses from
+  server-computed `legal_plays`). Leads the strongest card from its longest suit; when following,
+  reuses `determine_trick_winner` to check whether each candidate would currently win, playing the
+  cheapest winner or, failing that, the cheapest legal discard.
+- `Room` gained `bot_ids`/`game_to_lobby`, `add_bot`/`remove_bot` (host-only, fills/frees the
+  lowest open seat exactly like a human joining/leaving), and a `naming_rights_holder` fix so a
+  bot occupying a team's lowest seat can't lock out a human teammate's naming rights.
+- `main.py`'s `resolve_bot_turns` runs after every state-changing message, looping through any
+  consecutive bot turns (a run of bots in a row, or spanning a hand boundary). Each bot action
+  waits a real `asyncio.sleep` "thinking" delay and broadcasts individually rather than the whole
+  cascade firing and broadcasting instantly — bids take 1-2s, escalating by +1s per consecutive
+  bot bid in the same cascade so a run of bids doesn't feel simultaneous; trump calls, the moon
+  swap card, and card plays take ~1s (0.5-1.5s). The delay ranges are module-level (not
+  constants) so `test_main.py` zeroes them out for fast tests without touching the turn logic.
+- Frontend: a host-only "Add bot" button in the lobby (and a "Remove" button per bot), a "(Bot)"
+  label on bot-occupied seats in both the lobby and the live table.
+- `try_bot_bid.py` (repo root, gitignored-worthy scratch file, not part of the test suite) — a
+  small CLI for manually trying arbitrary hands against `choose_bid`/`choose_trump` by shorthand
+  (`"JS KS 9S AH QD TC"`).
+
+### Fixes found after playing against real bots
+- **Bots led with trump immediately.** `choose_card_to_play`'s leading logic picked the strongest
+  card from the bot's longest suit in hand — but trump is very often a bidding-team bot's longest
+  suit, so a bidder's partner would burn trump the instant they took the lead instead of saving
+  it. Now leads the highest *off-suit* card when any are available, only leading trump (the
+  lowest held, conserving the rest) once none remain.
+- **Completed tricks vanished instantly.** `GameSession.play_card` clears `current_trick` and
+  reports the winner in the same atomic state transition — no broadcast ever showed all 4 played
+  cards. Added `last_trick_cards`/`build_state_view`'s `last_trick` field (mirrors the existing
+  `last_trick_winner` pattern: persists into the next hand's bidding, resets on the next
+  `call_trump`) so the frontend's new `useTrickDisplay` hook can hold the finished trick on
+  screen for 2s — imperatively via a ref-based timer, not a `useEffect` cleanup tied to state
+  changes, since the latter would cancel the pending timer (without rescheduling it) the instant
+  the next trick's first card arrived, leaving the table stuck showing the old trick forever.
+- **Bidding cascades felt slow, and a bot's "thinking" time overlapped with the trick-hold.**
+  Bid delays were tuned down to a 1-2s range (from a wider one) and card plays to a flat 1.5s
+  (`CARD_PLAY_DELAY`). A bot about to lead a brand new trick now also waits `TRICK_CLEAR_DELAY`
+  (2s, matching `useTrickDisplay`'s `HOLD_MS`) on top of its own `CARD_PLAY_DELAY` before acting —
+  so its "thinking" timer doesn't start until the previous trick has actually finished being shown
+  on screen, instead of counting down silently underneath it. `useRoundBanner` was also reworked
+  to name the actual winner (`"<name> won the bid"`/`"<name> won the trick"`) instead of framing
+  the message from each viewer's own "you/your team" perspective, since a per-team framing doesn't
+  read naturally once the room includes bots.
+
+## Table UI polish — team-colored names, per-seat trick count
+- **Player names are now color-coded to their team**, in both an opponent's table seat and the
+  round-outcome toast, instead of being plain text a viewer has to cross-reference against the
+  scoreboard. `protocol.ts` gained `teamOf`/`playerColor` helpers (mirroring
+  `bid_euchre.models.team_of`'s fixed `player_id % 2` partnership split — a static seat-parity
+  rule, not live game state, so computing it client-side doesn't cross CLAUDE.md's
+  server-authority line the way turn/legality logic would). `useRoundBanner` was reworked again to
+  return structured `{winnerId, event}` instead of a pre-built string, so `GameRoom` can render
+  just the winner's name in their team's color rather than the whole toast in one plain color;
+  `Toast` now accepts a `ReactNode` message instead of a bare string, and the constructed banner
+  element is `useMemo`'d on `[winnerId, event, color]` so the Toast's auto-dismiss timer (keyed on
+  message identity) doesn't keep resetting on every unrelated state broadcast between the human's
+  screen and the bots' turns.
+- **The "N cards" counter under each opponent seat now shows tricks taken this hand instead.**
+  Card count was redundant with a well-understood 6-card starting hand and told you nothing about
+  how the hand was actually going; a running per-seat trick count does. `GameSession` gained
+  `tricks_won_by_player` (mirrors the existing per-team `_tricks_won`, reset in the same
+  `_begin_trick_play` and incremented alongside it in `play_card`), threaded into
+  `build_state_view` as `tricks_won` and consumed by `Table`/`Seat`.
+
+## Current test coverage
+- Backend: 135 tests (`pytest`), mypy strict clean. Includes a 500-hand fuzz test asserting
+  `choose_card_to_play` never produces an illegal card, and an end-to-end WebSocket test where a
+  lone human plus 3 bots resolve an entire bidding round on their own.
+- Frontend: 44 tests (`vitest`), `tsc` build and `oxlint` clean.
+
+## Out of scope for now
+- Public lobby browser, Discord-native friend invites, ML-based bots, P2P/WebRTC (per CLAUDE.md).

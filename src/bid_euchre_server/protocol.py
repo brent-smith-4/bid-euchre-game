@@ -58,10 +58,13 @@ def build_lobby_view(room: Room, viewer_id: int) -> dict[str, Any]:
             }
             for team_id, team in room.teams.items()
         },
+        "bots": sorted(room.bot_ids),
     }
 
 
-def build_state_view(session: GameSession, viewer_id: int, teams: dict[int, TeamMeta]) -> dict[str, Any]:
+def build_state_view(
+    session: GameSession, viewer_id: int, teams: dict[int, TeamMeta], bots: set[int]
+) -> dict[str, Any]:
     """The state payload sent to one specific player. Only `viewer_id`'s own
     hand is included in full — everyone else's hand is just a card count, so
     the server never leaks hidden information to the wrong client.
@@ -79,7 +82,11 @@ def build_state_view(session: GameSession, viewer_id: int, teams: dict[int, Team
         "winning_bid": bid_to_json(state.winning_bid) if state.winning_bid else None,
         "trump": trump_call_to_json(state.trump) if state.trump else None,
         "tricks_completed": len(state.tricks),
+        "tricks_won": session.tricks_won_by_player,
         "last_trick_winner": session.last_trick_winner,
+        "last_trick": (
+            [trick_play_to_json(p) for p in session.last_trick_cards] if session.last_trick_cards else None
+        ),
         "current_trick": [trick_play_to_json(p) for p in state.current_trick],
         "scores": dict(state.scores),
         "target_score": session.target_score,
@@ -92,4 +99,5 @@ def build_state_view(session: GameSession, viewer_id: int, teams: dict[int, Team
         "legal_plays": (
             [card_to_json(c) for c in session.legal_plays] if session.player_turn == viewer_id else []
         ),
+        "bots": sorted(bots),
     }

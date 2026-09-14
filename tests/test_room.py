@@ -16,7 +16,7 @@ class _FakeWebSocket:
 
 def _join(room, n=1):
     """Connect `n` fresh fake players and return their assigned player_ids."""
-    return [room.connections.assign_seat(_FakeWebSocket()) for _ in range(n)]
+    return [room.assign_seat(_FakeWebSocket()) for _ in range(n)]
 
 
 def _join_full_room():
@@ -158,6 +158,9 @@ def test_start_game_maps_teams_to_fixed_partnership_seats() -> None:
     assert room.lobby_to_game[team_a[1]] == 2
     assert room.lobby_to_game[team_b[0]] == 1
     assert room.lobby_to_game[team_b[1]] == 3
+    # game_to_lobby is the exact reverse of lobby_to_game.
+    for lobby_id, game_id in room.lobby_to_game.items():
+        assert room.game_to_lobby[game_id] == lobby_id
 
 
 def test_lobby_actions_rejected_once_game_has_started() -> None:
@@ -170,3 +173,86 @@ def test_lobby_actions_rejected_once_game_has_started() -> None:
         room.set_target_score(room.host_id, 10)
     with pytest.raises(ValueError):
         room.start_game(room.host_id)
+
+
+def test_add_bot_is_host_only_and_fills_the_lowest_open_seat() -> None:
+    registry = RoomRegistry()
+    room = registry.create_room()
+    host = room.assign_seat(_FakeWebSocket())
+    room.auto_balance_new_player(host)
+    non_host = room.assign_seat(_FakeWebSocket())
+    room.auto_balance_new_player(non_host)
+
+    with pytest.raises(ValueError):
+        room.add_bot(non_host)
+
+    bot_id = room.add_bot(host)
+    assert bot_id == 2  # lowest seat not already taken by a human
+    assert bot_id in room.bot_ids
+    assert bot_id in room.player_team  # auto-balanced onto a team like a human
+
+
+def test_add_bot_does_not_collide_with_human_seats() -> None:
+    registry = RoomRegistry()
+    room = registry.create_room()
+    human = room.assign_seat(_FakeWebSocket())
+    room.auto_balance_new_player(human)
+
+    bot_ids = [room.add_bot(human) for _ in range(3)]
+
+    assert bot_ids == [1, 2, 3]
+    with pytest.raises(ValueError):
+        room.add_bot(human)  # room is full
+
+
+def test_bots_count_toward_start_games_two_per_team_requirement() -> None:
+    registry = RoomRegistry()
+    room = registry.create_room()
+    host = room.assign_seat(_FakeWebSocket())
+    room.auto_balance_new_player(host)
+    for _ in range(3):
+        room.add_bot(host)
+
+    room.start_game(host)
+
+    assert room.status is RoomStatus.IN_GAME
+
+
+def test_remove_bot_frees_its_seat_and_is_host_only() -> None:
+    registry = RoomRegistry()
+    room = registry.create_room()
+    host = room.assign_seat(_FakeWebSocket())
+    room.auto_balance_new_player(host)
+    non_host = room.assign_seat(_FakeWebSocket())
+    room.auto_balance_new_player(non_host)
+    bot_id = room.add_bot(host)
+
+    with pytest.raises(ValueError):
+        room.remove_bot(non_host, bot_id)
+    with pytest.raises(ValueError):
+        room.remove_bot(host, 99)  # not a bot seat
+
+    room.remove_bot(host, bot_id)
+    assert bot_id not in room.bot_ids
+    assert bot_id not in room.player_team
+    # the seat is free again.
+    assert room.add_bot(host) == bot_id
+
+
+def test_naming_rights_holder_skips_bots_occupying_the_lowest_seat() -> None:
+    registry = RoomRegistry()
+    room = registry.create_room()
+    host = room.assign_seat(_FakeWebSocket())  # seat 0
+    room.auto_balance_new_player(host)  # team A
+    bot_id = room.add_bot(host)  # seat 1, team B (smaller team)
+    human_b = room.assign_seat(_FakeWebSocket())  # seat 2 -> team A (still smaller after bot)
+    room.auto_balance_new_player(human_b)
+
+    # Put a second human on team B alongside the bot, at a higher seat id,
+    # so team B's lowest RAW id is the bot - naming rights must skip it.
+    human_on_team_b = room.assign_seat(_FakeWebSocket())  # seat 3
+    room.auto_balance_new_player(human_on_team_b)
+    room.player_team[human_on_team_b] = room.player_team[bot_id]
+
+    assert bot_id < human_on_team_b  # the bot really is the lower id
+    assert room.naming_rights_holder(room.player_team[bot_id]) == human_on_team_b

@@ -181,6 +181,13 @@
   font-weight: 600;
 }
 
+.bot-marker {
+  margin-left: 0.4em;
+  font-size: 0.7em;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
 .dealer-marker {
   display: inline-flex;
   align-items: center;

@@ -15,25 +15,28 @@ function makeLobby(overrides: Partial<LobbyState> = {}): LobbyState {
       0: { color: "#3366cc", name: null, naming_rights_holder: 0 },
       1: { color: "#cc3333", name: null, naming_rights_holder: 1 },
     },
+    bots: [],
     ...overrides,
   };
 }
 
 function noop() {}
 
+const commonHandlers = {
+  onSwapTeam: noop,
+  onSetTeamColor: noop,
+  onSetTeamName: noop,
+  onSetTargetScore: noop,
+  onStartGame: noop,
+  onAddBot: noop,
+  onRemoveBot: noop,
+};
+
 describe("Lobby", () => {
   it("lets a player swap onto the other team and reports who they swap with", () => {
     const onSwapTeam = vi.fn();
     render(
-      <Lobby
-        lobbyState={makeLobby()}
-        yourPlayerId={0}
-        onSwapTeam={onSwapTeam}
-        onSetTeamColor={noop}
-        onSetTeamName={noop}
-        onSetTargetScore={noop}
-        onStartGame={noop}
-      />,
+      <Lobby lobbyState={makeLobby()} yourPlayerId={0} {...commonHandlers} onSwapTeam={onSwapTeam} />,
     );
 
     // player 0 is on team 0; only players on team 1 (Bravo, Delta) get a swap button.
@@ -45,17 +48,7 @@ describe("Lobby", () => {
   });
 
   it("only enables a team's color input for players seated on that team", () => {
-    render(
-      <Lobby
-        lobbyState={makeLobby()}
-        yourPlayerId={0}
-        onSwapTeam={noop}
-        onSetTeamColor={noop}
-        onSetTeamName={noop}
-        onSetTargetScore={noop}
-        onStartGame={noop}
-      />,
-    );
+    render(<Lobby lobbyState={makeLobby()} yourPlayerId={0} {...commonHandlers} />);
 
     const colorInputs = document.querySelectorAll('input[type="color"]');
     expect(colorInputs).toHaveLength(2);
@@ -65,15 +58,7 @@ describe("Lobby", () => {
 
   it("only enables a team's name input for that team's naming-rights holder", () => {
     render(
-      <Lobby
-        lobbyState={makeLobby({ your_player_id: 2 })}
-        yourPlayerId={2}
-        onSwapTeam={noop}
-        onSetTeamColor={noop}
-        onSetTeamName={noop}
-        onSetTargetScore={noop}
-        onStartGame={noop}
-      />,
+      <Lobby lobbyState={makeLobby({ your_player_id: 2 })} yourPlayerId={2} {...commonHandlers} />,
     );
 
     // player 2 is on team 0, but naming rights belong to player 0.
@@ -88,25 +73,14 @@ describe("Lobby", () => {
       <Lobby
         lobbyState={makeLobby({ players: { 0: 0, 1: 1, 2: 0 } })}
         yourPlayerId={0}
-        onSwapTeam={noop}
-        onSetTeamColor={noop}
-        onSetTeamName={noop}
-        onSetTargetScore={noop}
+        {...commonHandlers}
         onStartGame={onStartGame}
       />,
     );
     expect(screen.getByRole("button", { name: /start game/i })).toBeDisabled();
 
     rerender(
-      <Lobby
-        lobbyState={makeLobby()}
-        yourPlayerId={0}
-        onSwapTeam={noop}
-        onSetTeamColor={noop}
-        onSetTeamName={noop}
-        onSetTargetScore={noop}
-        onStartGame={onStartGame}
-      />,
+      <Lobby lobbyState={makeLobby()} yourPlayerId={0} {...commonHandlers} onStartGame={onStartGame} />,
     );
     const startButton = screen.getByRole("button", { name: /start game/i });
     expect(startButton).toBeEnabled();
@@ -116,17 +90,50 @@ describe("Lobby", () => {
 
   it("shows a waiting message instead of host controls for non-hosts", () => {
     render(
-      <Lobby
-        lobbyState={makeLobby({ your_player_id: 1 })}
-        yourPlayerId={1}
-        onSwapTeam={noop}
-        onSetTeamColor={noop}
-        onSetTeamName={noop}
-        onSetTargetScore={noop}
-        onStartGame={noop}
-      />,
+      <Lobby lobbyState={makeLobby({ your_player_id: 1 })} yourPlayerId={1} {...commonHandlers} />,
     );
     expect(screen.queryByRole("button", { name: /start game/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add bot/i })).not.toBeInTheDocument();
     expect(screen.getByText(/waiting for the host/i)).toBeInTheDocument();
+  });
+
+  it("lets only the host add a bot, disabled once the room is full", () => {
+    const onAddBot = vi.fn();
+    const { rerender } = render(
+      <Lobby
+        lobbyState={makeLobby({ players: { 0: 0, 1: 1, 2: 0 } })}
+        yourPlayerId={0}
+        {...commonHandlers}
+        onAddBot={onAddBot}
+      />,
+    );
+    const addBotButton = screen.getByRole("button", { name: /add bot/i });
+    expect(addBotButton).toBeEnabled();
+    fireEvent.click(addBotButton);
+    expect(onAddBot).toHaveBeenCalled();
+
+    rerender(
+      <Lobby lobbyState={makeLobby()} yourPlayerId={0} {...commonHandlers} onAddBot={onAddBot} />,
+    );
+    expect(screen.getByRole("button", { name: /add bot/i })).toBeDisabled(); // 4 seats full
+  });
+
+  it("shows a Bot label and a host-only remove button for bot-occupied seats", () => {
+    const onRemoveBot = vi.fn();
+    const lobby = makeLobby({ bots: [1] });
+
+    const { rerender } = render(
+      <Lobby lobbyState={lobby} yourPlayerId={0} {...commonHandlers} onRemoveBot={onRemoveBot} />,
+    );
+    expect(screen.getByText(/\(Bot\)/)).toBeInTheDocument();
+    const removeButton = screen.getByRole("button", { name: /remove/i });
+    fireEvent.click(removeButton);
+    expect(onRemoveBot).toHaveBeenCalledWith(1);
+
+    // a non-host seated on a different team sees no remove button for the bot.
+    rerender(
+      <Lobby lobbyState={lobby} yourPlayerId={2} {...commonHandlers} onRemoveBot={onRemoveBot} />,
+    );
+    expect(screen.queryByRole("button", { name: /remove/i })).not.toBeInTheDocument();
   });
 });

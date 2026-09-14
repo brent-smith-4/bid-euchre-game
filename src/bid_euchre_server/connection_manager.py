@@ -3,7 +3,10 @@ single room, and broadcasts personalized views to everyone connected.
 
 Deliberately generic over *what* gets broadcast (a lobby view, a game view,
 ...) - callers pass a per-viewer builder function, so this module has no
-knowledge of GameSession/Room at all.
+knowledge of GameSession/Room at all. Seat *picking* (which id a new
+connection gets) lives on Room instead of here, since Room also has to
+account for bot-occupied seats that never show up in this class at all -
+this class only tracks live WebSocket connections.
 """
 
 from __future__ import annotations
@@ -11,8 +14,6 @@ from __future__ import annotations
 from typing import Callable
 
 from fastapi import WebSocket
-
-from bid_euchre.models import NUM_PLAYERS
 
 
 class GameFullError(RuntimeError):
@@ -23,12 +24,8 @@ class ConnectionManager:
     def __init__(self) -> None:
         self._connections: dict[int, WebSocket] = {}
 
-    def assign_seat(self, websocket: WebSocket) -> int:
-        for player_id in range(NUM_PLAYERS):
-            if player_id not in self._connections:
-                self._connections[player_id] = websocket
-                return player_id
-        raise GameFullError("all 4 seats are taken")
+    def occupy(self, player_id: int, websocket: WebSocket) -> None:
+        self._connections[player_id] = websocket
 
     def disconnect(self, player_id: int) -> None:
         self._connections.pop(player_id, None)

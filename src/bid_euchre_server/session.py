@@ -23,6 +23,7 @@ from bid_euchre.models import (
     BidRung,
     Card,
     HandState,
+    Trick,
     TrickPlay,
     TrumpCall,
     partner_of,
@@ -51,9 +52,11 @@ class GameSession:
         self._bid_turn_index = 0
         self._current_high = BidRung.PASS
         self._tricks_won = {TEAM_A: 0, TEAM_B: 0}
+        self._tricks_won_by_player = dict.fromkeys(range(NUM_PLAYERS), 0)
         self._trick_order: list[int] = []
         self._trick_turn_index = 0
         self._last_trick_winner: int | None = None
+        self._last_trick_cards: Trick | None = None
         # The bidder's chosen outgoing card, held here (never serialized to
         # any client) from call_trump until the partner responds in
         # submit_moon_swap_card - this is what keeps the swap blind.
@@ -92,6 +95,26 @@ class GameSession:
         determine_trick_winner's ranking logic themselves.
         """
         return self._last_trick_winner
+
+    @property
+    def last_trick_cards(self) -> Trick | None:
+        """The 4 plays of the most recently completed trick in the CURRENT
+        hand, or None if none has finished yet. `current_trick` is cleared
+        the instant a trick completes (to start building the next one), so
+        this is the only way a client ever actually sees a finished trick's
+        cards - lets the UI hold them on screen for a beat instead of the
+        table visually snapping empty the moment the 4th card lands.
+        """
+        return self._last_trick_cards
+
+    @property
+    def tricks_won_by_player(self) -> dict[int, int]:
+        """Tricks each player has personally won in the CURRENT hand (as
+        opposed to `state.scores`, which is the match-long per-team total) -
+        lets the UI show a running per-seat trick count instead of a static
+        cards-remaining readout.
+        """
+        return dict(self._tricks_won_by_player)
 
     @property
     def legal_bids(self) -> list[BidRung]:
@@ -213,7 +236,9 @@ class GameSession:
 
     def _begin_trick_play(self, winning_bid: Bid) -> None:
         self._tricks_won = {TEAM_A: 0, TEAM_B: 0}
+        self._tricks_won_by_player = dict.fromkeys(range(NUM_PLAYERS), 0)
         self._last_trick_winner = None
+        self._last_trick_cards = None
         # The first trick is led by the player left of the dealer - the same
         # seat that led off bidding (self._bid_order[0]) - not by the bid
         # winner. If that seat is the sitting-out partner of an ALONE bid,
@@ -251,8 +276,10 @@ class GameSession:
 
         winner_id = determine_trick_winner(self.state.current_trick, self.state.trump)
         self.state.tricks.append(self.state.current_trick)
+        self._last_trick_cards = self.state.tricks[-1]
         self.state.current_trick = []
         self._tricks_won[team_of(winner_id)] += 1
+        self._tricks_won_by_player[winner_id] += 1
         self._last_trick_winner = winner_id
 
         assert self.state.winning_bid is not None

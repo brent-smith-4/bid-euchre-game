@@ -1,7 +1,8 @@
 import { useEffect } from "react";
+import type { ReactNode } from "react";
 
 interface ToastProps {
-  message: string | null;
+  message: ReactNode;
   onDismiss: () => void;
   variant: "error" | "info";
 }

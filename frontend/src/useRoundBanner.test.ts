@@ -15,7 +15,9 @@ function makeState(overrides: Partial<StateView>): StateView {
     winning_bid: null,
     trump: null,
     tricks_completed: 0,
+    tricks_won: {},
     last_trick_winner: null,
+    last_trick: null,
     current_trick: [],
     scores: {},
     target_score: 52,
@@ -25,78 +27,79 @@ function makeState(overrides: Partial<StateView>): StateView {
     legal_bids: [],
     legal_plays: [],
     teams: { 0: { color: "#3366cc", name: null }, 1: { color: "#cc3333", name: null } },
+    bots: [],
     ...overrides,
   };
 }
 
 describe("useRoundBanner", () => {
   it("says nothing on the very first state (no prior state to diff against)", () => {
-    const { result } = renderHook(({ state, yourId }) => useRoundBanner(state, yourId), {
-      initialProps: { state: makeState({ phase: "CALLING_TRUMP", winning_bid: { player_id: 0, rung: "THREE" } }), yourId: 0 },
+    const { result } = renderHook(({ state }) => useRoundBanner(state), {
+      initialProps: { state: makeState({ phase: "CALLING_TRUMP", winning_bid: { player_id: 0, rung: "THREE" } }) },
     });
-    expect(result.current.message).toBeNull();
+    expect(result.current.winnerId).toBeNull();
+    expect(result.current.event).toBeNull();
   });
 
-  it("announces a bid win when bidding resolves in the viewer's favor", () => {
-    const { result, rerender } = renderHook(({ state, yourId }) => useRoundBanner(state, yourId), {
-      initialProps: { state: makeState({ phase: "BIDDING" }), yourId: 0 },
+  it("announces who won the bid", () => {
+    const { result, rerender } = renderHook(({ state }) => useRoundBanner(state), {
+      initialProps: { state: makeState({ phase: "BIDDING" }) },
     });
 
     rerender({
       state: makeState({ phase: "CALLING_TRUMP", winning_bid: { player_id: 0, rung: "THREE" } }),
-      yourId: 0,
     });
-    expect(result.current.message).toBe("You won the bid!");
+    expect(result.current.winnerId).toBe(0);
+    expect(result.current.event).toBe("bid");
   });
 
-  it("announces a bid loss when someone else wins the bid", () => {
-    const { result, rerender } = renderHook(({ state, yourId }) => useRoundBanner(state, yourId), {
-      initialProps: { state: makeState({ phase: "BIDDING" }), yourId: 0 },
+  it("announces a different bid winner by id", () => {
+    const { result, rerender } = renderHook(({ state }) => useRoundBanner(state), {
+      initialProps: { state: makeState({ phase: "BIDDING" }) },
     });
 
     rerender({
       state: makeState({ phase: "CALLING_TRUMP", winning_bid: { player_id: 2, rung: "THREE" } }),
-      yourId: 0,
     });
-    expect(result.current.message).toBe("You lost the bid.");
+    expect(result.current.winnerId).toBe(2);
+    expect(result.current.event).toBe("bid");
   });
 
-  it("announces a trick win for the viewer's whole team, not just the card-winner", () => {
-    const { result, rerender } = renderHook(({ state, yourId }) => useRoundBanner(state, yourId), {
-      initialProps: { state: makeState({ phase: "PLAYING", tricks_completed: 0 }), yourId: 0 },
+  it("announces who won the trick", () => {
+    const { result, rerender } = renderHook(({ state }) => useRoundBanner(state), {
+      initialProps: { state: makeState({ phase: "PLAYING", tricks_completed: 0 }) },
     });
 
-    // player 2 is on the same team as player 0 (team_of = player_id % 2)
     rerender({
       state: makeState({ phase: "PLAYING", tricks_completed: 1, last_trick_winner: 2 }),
-      yourId: 0,
     });
-    expect(result.current.message).toBe("Your team won the trick!");
+    expect(result.current.winnerId).toBe(2);
+    expect(result.current.event).toBe("trick");
   });
 
-  it("announces a trick loss when the other team wins it", () => {
-    const { result, rerender } = renderHook(({ state, yourId }) => useRoundBanner(state, yourId), {
-      initialProps: { state: makeState({ phase: "PLAYING", tricks_completed: 0 }), yourId: 0 },
+  it("announces a different trick winner by id", () => {
+    const { result, rerender } = renderHook(({ state }) => useRoundBanner(state), {
+      initialProps: { state: makeState({ phase: "PLAYING", tricks_completed: 0 }) },
     });
 
     rerender({
       state: makeState({ phase: "PLAYING", tricks_completed: 1, last_trick_winner: 1 }),
-      yourId: 0,
     });
-    expect(result.current.message).toBe("You lost the trick.");
+    expect(result.current.winnerId).toBe(1);
+    expect(result.current.event).toBe("trick");
   });
 
-  it("dismiss clears the message", () => {
-    const { result, rerender } = renderHook(({ state, yourId }) => useRoundBanner(state, yourId), {
-      initialProps: { state: makeState({ phase: "BIDDING" }), yourId: 0 },
+  it("dismiss clears the winner and event", () => {
+    const { result, rerender } = renderHook(({ state }) => useRoundBanner(state), {
+      initialProps: { state: makeState({ phase: "BIDDING" }) },
     });
     rerender({
       state: makeState({ phase: "CALLING_TRUMP", winning_bid: { player_id: 0, rung: "THREE" } }),
-      yourId: 0,
     });
-    expect(result.current.message).not.toBeNull();
+    expect(result.current.winnerId).not.toBeNull();
 
     act(() => result.current.dismiss());
-    expect(result.current.message).toBeNull();
+    expect(result.current.winnerId).toBeNull();
+    expect(result.current.event).toBeNull();
   });
 });

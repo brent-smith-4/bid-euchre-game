@@ -1,4 +1,4 @@
-from bid_euchre.models import BidRung, TrumpCall, TrumpMode, partner_of
+from bid_euchre.models import TEAM_A, TEAM_B, BidRung, TrumpCall, TrumpMode, partner_of
 from bid_euchre.ranking import effective_suit
 from bid_euchre.trick import determine_trick_winner, legal_plays
 from bid_euchre_server.session import GameSession, Phase
@@ -244,6 +244,69 @@ def test_last_trick_winner_persists_into_next_bidding_then_resets_on_call_trump(
     session.submit_bid(dealer_id, BidRung.THREE)
     session.call_trump(dealer_id, TrumpCall(mode=TrumpMode.HIGH))
     assert session.last_trick_winner is None
+
+
+def test_last_trick_cards_none_until_a_trick_completes_then_has_all_4_plays() -> None:
+    session = GameSession()
+    assert session.last_trick_cards is None
+
+    dealer_id = _pass_first_three(session)
+    session.submit_bid(dealer_id, BidRung.THREE)
+    session.call_trump(dealer_id, TrumpCall(mode=TrumpMode.HIGH))
+    assert session.last_trick_cards is None  # trump just called, no trick played yet
+
+    for _ in list(session._trick_order):  # noqa: SLF001
+        _play_current_players_first_legal_card(session)
+
+    assert session.last_trick_cards is not None
+    assert len(session.last_trick_cards) == 4
+    assert session.last_trick_cards == session.state.tricks[-1]
+    # current_trick has already moved on to building the next trick, empty
+    # at this exact point - last_trick_cards is the only place a client
+    # could ever see the just-finished trick's cards.
+    assert session.state.current_trick == []
+
+
+def test_last_trick_cards_persists_into_next_bidding_then_resets_on_call_trump() -> None:
+    session = GameSession(target_score=1000)
+    _play_out_hand(session)
+
+    assert session.phase is Phase.BIDDING
+    assert session.last_trick_cards is not None
+
+    dealer_id = _pass_first_three(session)
+    session.submit_bid(dealer_id, BidRung.THREE)
+    session.call_trump(dealer_id, TrumpCall(mode=TrumpMode.HIGH))
+    assert session.last_trick_cards is None
+
+
+def test_tricks_won_by_player_tracks_each_players_own_count_and_resets_next_hand() -> None:
+    session = GameSession(target_score=1000)
+    assert session.tricks_won_by_player == {0: 0, 1: 0, 2: 0, 3: 0}
+
+    dealer_id = _pass_first_three(session)
+    session.submit_bid(dealer_id, BidRung.THREE)
+    session.call_trump(dealer_id, TrumpCall(mode=TrumpMode.HIGH))
+    assert session.tricks_won_by_player == {0: 0, 1: 0, 2: 0, 3: 0}
+
+    while session.phase is Phase.PLAYING:
+        _play_current_players_first_legal_card(session)
+
+    # Hand just finished (back in BIDDING for the next hand) - all 6 tricks
+    # are accounted for across the 4 seats, matching the existing per-team
+    # total split by partnership (seats 0&2 vs 1&3).
+    tricks_won = session.tricks_won_by_player
+    assert sum(tricks_won.values()) == 6
+    assert tricks_won[0] + tricks_won[2] == session._tricks_won[TEAM_A]  # noqa: SLF001
+    assert tricks_won[1] + tricks_won[3] == session._tricks_won[TEAM_B]  # noqa: SLF001
+
+    # A fresh hand's tricks_won_by_player resets to all zero, same as the
+    # existing per-team _tricks_won does.
+    assert session.phase is Phase.BIDDING
+    dealer_id = _pass_first_three(session)
+    session.submit_bid(dealer_id, BidRung.THREE)
+    session.call_trump(dealer_id, TrumpCall(mode=TrumpMode.HIGH))
+    assert session.tricks_won_by_player == {0: 0, 1: 0, 2: 0, 3: 0}
 
 
 def test_left_of_dealer_leads_first_trick_even_when_not_the_bid_winner() -> None:

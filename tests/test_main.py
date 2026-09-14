@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from starlette.testclient import WebSocketTestSession
 
 import bid_euchre_server.main as main_module
+from bid_euchre.models import BidRung
 from bid_euchre_server.protocol import card_to_json
 from bid_euchre_server.rate_limit import RateLimiter
 from bid_euchre_server.room import RoomRegistry
@@ -22,6 +23,13 @@ import pytest
 def reset_registry() -> None:
     main_module.registry = RoomRegistry()
     main_module.room_creation_limiter = RateLimiter(max_calls=5, window_seconds=60)
+    # Zero out the bot "thinking" delays so tests run fast - production
+    # behavior (real delays) isn't exercised here, just the turn logic.
+    main_module.BID_DELAY_RANGE = (0.0, 0.0)
+    main_module.BID_DELAY_INCREMENT = 0.0
+    main_module.ACTION_DELAY_RANGE = (0.0, 0.0)
+    main_module.CARD_PLAY_DELAY = 0.0
+    main_module.TRICK_CLEAR_DELAY = 0.0
 
 
 def _drain(ws: WebSocketTestSession, count: int) -> list[dict[str, Any]]:
@@ -358,6 +366,79 @@ def test_disconnect_during_game_frees_seat_for_rejoin() -> None:
         session0.__exit__(None, None, None)
         session2.__exit__(None, None, None)
         session3.__exit__(None, None, None)
+
+
+def _drain_until_human_turn(ws: WebSocketTestSession, human_id: int, max_messages: int = 30) -> dict[str, Any]:
+    """Bot turns now broadcast individually (one per bot action, each after
+    its own delay - zeroed in tests, see reset_registry) rather than one
+    batched broadcast at the end, so a human waiting on the bots ahead of
+    them in turn order has to drain one state message per bot action.
+    """
+    for _ in range(max_messages):
+        state = ws.receive_json()
+        if state.get("phase") == "GAME_OVER":
+            return state
+        if state.get("bidder_turn") == human_id:
+            return state
+        if state.get("player_turn") == human_id:
+            return state
+        if state.get("moon_swap_turn") == human_id:
+            return state
+        if state.get("phase") == "CALLING_TRUMP" and (state.get("winning_bid") or {}).get("player_id") == human_id:
+            return state
+    raise AssertionError("gave up waiting for the human's turn - a bot may be stuck")
+
+
+def test_bots_resolve_their_own_turns_over_the_real_ws_layer() -> None:
+    """One human connects, the host adds 3 bots, and starts the game. Bids
+    from the 3 bots resolve entirely on their own via resolve_bot_turns -
+    bid_order always puts the human (dealer here) last, so the human always
+    has at least one required action (their own bid), but never needs to
+    act on the bots' behalf. Proves the bot cascade works over the real
+    WS/broadcast layer, not just in isolation (test_room.py covers Room's
+    bookkeeping directly, test_bot.py covers the decision functions).
+    """
+    client = TestClient(main_module.app)
+    code = _create_room(client)
+    with client.websocket_connect(f"/ws/{code}") as ws:
+        assert ws.receive_json() == {"type": "assigned_seat", "player_id": 0}
+        ws.receive_json()  # initial lobby_state
+
+        for _ in range(3):
+            ws.send_json({"type": "add_bot"})
+            ws.receive_json()  # lobby_state after each bot joins
+
+        ws.send_json({"type": "start_game"})
+        state = _drain_until_human_turn(ws, 0)
+
+        # Dealer defaults to game id 0 (the human, since team auto-balance
+        # here happens to keep lobby ids == game ids); bid_order always
+        # bids the dealer last, so by the time it's the human's turn, all 3
+        # bots have already bid on their own.
+        assert state["type"] == "state"
+        assert state["phase"] == "BIDDING"
+        assert state["your_player_id"] == 0
+        assert state["bidder_turn"] == 0
+        assert len(state["bid_history"]) == 3
+
+        legal_bids = state["legal_bids"]
+        assert legal_bids  # populated since it's this viewer's turn
+        chosen_bid = "PASS" if "PASS" in legal_bids else min(legal_bids, key=lambda r: BidRung[r].value)
+        ws.send_json({"type": "bid", "rung": chosen_bid})
+        state = _drain_until_human_turn(ws, 0)
+
+        # Bidding is over the moment the human bids (4 total bids) - whatever
+        # happened next (a bot calling trump and maybe even playing into
+        # PLAYING, or the human needing to call trump themselves) resolved
+        # automatically up to the next point that needs the human.
+        assert state["phase"] != "BIDDING"
+        assert state["winning_bid"] is not None
+
+        if state["phase"] == "CALLING_TRUMP" and state["winning_bid"]["player_id"] == 0:
+            ws.send_json({"type": "call_trump", "mode": "HIGH", "suit": None, "swap_out_card": None})
+            state = _drain_until_human_turn(ws, 0)
+
+        assert state["phase"] in ("PLAYING", "MOON_SWAP", "GAME_OVER")
 
 
 def test_room_becomes_full_again_error_once_in_game() -> None:

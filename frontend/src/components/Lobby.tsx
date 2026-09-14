@@ -10,6 +10,8 @@ interface LobbyProps {
   onSetTeamName: (team: number, name: string) => void;
   onSetTargetScore: (value: number) => void;
   onStartGame: () => void;
+  onAddBot: () => void;
+  onRemoveBot: (botId: number) => void;
 }
 
 const TEAM_IDS = [0, 1];
@@ -22,6 +24,8 @@ export function Lobby({
   onSetTeamName,
   onSetTargetScore,
   onStartGame,
+  onAddBot,
+  onRemoveBot,
 }: LobbyProps) {
   const yourTeam = lobbyState.players[yourPlayerId];
   const teamCounts = TEAM_IDS.map(
@@ -29,6 +33,7 @@ export function Lobby({
   );
   const canStart = teamCounts.every((count) => count === 2);
   const isHost = yourPlayerId === lobbyState.host_id;
+  const seatedCount = Object.keys(lobbyState.players).length;
 
   return (
     <div className="lobby">
@@ -43,9 +48,11 @@ export function Lobby({
             lobbyState={lobbyState}
             yourPlayerId={yourPlayerId}
             yourTeam={yourTeam}
+            isHost={isHost}
             onSwapTeam={onSwapTeam}
             onSetTeamColor={onSetTeamColor}
             onSetTeamName={onSetTeamName}
+            onRemoveBot={onRemoveBot}
           />
         ))}
       </div>
@@ -65,6 +72,9 @@ export function Lobby({
                 }}
               />
             </label>
+            <button type="button" disabled={seatedCount >= 4} onClick={onAddBot}>
+              Add bot
+            </button>
             <button type="button" disabled={!canStart} onClick={onStartGame}>
               Start game
             </button>
@@ -90,9 +100,11 @@ interface TeamPanelProps {
   lobbyState: LobbyState;
   yourPlayerId: number;
   yourTeam: number | undefined;
+  isHost: boolean;
   onSwapTeam: (withPlayerId: number) => void;
   onSetTeamColor: (team: number, color: string) => void;
   onSetTeamName: (team: number, name: string) => void;
+  onRemoveBot: (botId: number) => void;
 }
 
 function TeamPanel({
@@ -100,9 +112,11 @@ function TeamPanel({
   lobbyState,
   yourPlayerId,
   yourTeam,
+  isHost,
   onSwapTeam,
   onSetTeamColor,
   onSetTeamName,
+  onRemoveBot,
 }: TeamPanelProps) {
   const team = lobbyState.teams[teamId];
   const members = Object.entries(lobbyState.players)
@@ -130,17 +144,26 @@ function TeamPanel({
         onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
       />
       <ul>
-        {members.map((playerId) => (
-          <li key={playerId}>
-            {playerName(playerId)}
-            {playerId === yourPlayerId && " (you)"}
-            {!youAreOnThisTeam && yourTeam !== undefined && (
-              <button type="button" onClick={() => onSwapTeam(playerId)}>
-                Swap with me
-              </button>
-            )}
-          </li>
-        ))}
+        {members.map((playerId) => {
+          const isBot = lobbyState.bots.includes(playerId);
+          return (
+            <li key={playerId}>
+              {playerName(playerId)}
+              {isBot && " (Bot)"}
+              {!isBot && playerId === yourPlayerId && " (you)"}
+              {!youAreOnThisTeam && yourTeam !== undefined && (
+                <button type="button" onClick={() => onSwapTeam(playerId)}>
+                  Swap with me
+                </button>
+              )}
+              {isBot && isHost && (
+                <button type="button" onClick={() => onRemoveBot(playerId)}>
+                  Remove
+                </button>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

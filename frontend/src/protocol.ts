@@ -55,7 +55,9 @@ export interface StateView {
   winning_bid: Bid | null;
   trump: TrumpCall | null;
   tricks_completed: number;
+  tricks_won: Record<number, number>;
   last_trick_winner: number | null;
+  last_trick: TrickPlay[] | null;
   current_trick: TrickPlay[];
   scores: Record<number, number>;
   target_score: number;
@@ -65,6 +67,7 @@ export interface StateView {
   legal_bids: BidRung[];
   legal_plays: Card[];
   teams: Record<number, TeamMeta>;
+  bots: number[];
 }
 
 // The payload build_lobby_view sends, personalized per viewer, while a
@@ -77,6 +80,7 @@ export interface LobbyState {
   target_score: number;
   players: Record<number, number>; // player_id -> team (0/1)
   teams: Record<number, LobbyTeamMeta>;
+  bots: number[];
 }
 
 export interface AssignedSeatMessage {
@@ -100,7 +104,9 @@ export type ClientMessage =
   | { type: "set_team_color"; team: number; color: string }
   | { type: "set_team_name"; team: number; name: string }
   | { type: "set_target_score"; value: number }
-  | { type: "start_game" };
+  | { type: "start_game" }
+  | { type: "add_bot" }
+  | { type: "remove_bot"; bot_id: number };
 
 // -- display helpers ---------------------------------------------------
 
@@ -139,6 +145,18 @@ const PLAYER_NAME = ["Alpha", "Bravo", "Charlie", "Delta"];
 
 export function playerName(playerId: number): string {
   return PLAYER_NAME[playerId] ?? `Player ${playerId}`;
+}
+
+// Fixed partnerships: seats 0 & 2 are one team, 1 & 3 are the other -
+// mirrors bid_euchre.models.team_of exactly (a static seat-parity rule, not
+// game state, so computing it client-side isn't the server-authority
+// violation CLAUDE.md warns against for turn/legality logic).
+export function teamOf(playerId: number): number {
+  return playerId % 2;
+}
+
+export function playerColor(teams: Record<number, TeamMeta>, playerId: number): string {
+  return teams[teamOf(playerId)].color;
 }
 
 export function suitSymbol(suit: Suit): string {
