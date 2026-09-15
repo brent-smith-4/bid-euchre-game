@@ -396,6 +396,22 @@ button.playing-card:hover:not(:disabled) {
   text-align: center;
 }
 
+.game-over-scores {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 600;
+}
+
+.game-over-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
 .toast {
   position: fixed;
   left: 50%;

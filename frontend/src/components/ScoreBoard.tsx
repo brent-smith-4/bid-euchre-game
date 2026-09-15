@@ -1,4 +1,5 @@
 import type { TeamMeta } from "../protocol";
+import { teamLabel } from "../protocol";
 
 interface ScoreBoardProps {
   scores: Record<number, number>;
@@ -17,7 +18,7 @@ export function ScoreBoard({ scores, targetScore, yourTeam, teams }: ScoreBoardP
           className={yourTeam === teamId ? "your-team" : ""}
           style={{ color: teams[teamId]?.color }}
         >
-          {teams[teamId]?.name ?? (teamId === 0 ? "Team A" : "Team B")}: {scores[teamId] ?? 0}
+          {teamLabel(teams, teamId)}: {scores[teamId] ?? 0}
         </div>
       ))}
       <div className="target">Target: {targetScore}</div>

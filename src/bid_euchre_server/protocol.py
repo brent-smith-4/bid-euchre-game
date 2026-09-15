@@ -63,7 +63,7 @@ def build_lobby_view(room: Room, viewer_id: int) -> dict[str, Any]:
 
 
 def build_state_view(
-    session: GameSession, viewer_id: int, teams: dict[int, TeamMeta], bots: set[int]
+    session: GameSession, viewer_id: int, teams: dict[int, TeamMeta], bots: set[int], is_host: bool
 ) -> dict[str, Any]:
     """The state payload sent to one specific player. Only `viewer_id`'s own
     hand is included in full — everyone else's hand is just a card count, so
@@ -100,4 +100,5 @@ def build_state_view(
             [card_to_json(c) for c in session.legal_plays] if session.player_turn == viewer_id else []
         ),
         "bots": sorted(bots),
+        "is_host": is_host,
     }

@@ -68,6 +68,7 @@ export interface StateView {
   legal_plays: Card[];
   teams: Record<number, TeamMeta>;
   bots: number[];
+  is_host: boolean;
 }
 
 // The payload build_lobby_view sends, personalized per viewer, while a
@@ -106,7 +107,8 @@ export type ClientMessage =
   | { type: "set_target_score"; value: number }
   | { type: "start_game" }
   | { type: "add_bot" }
-  | { type: "remove_bot"; bot_id: number };
+  | { type: "remove_bot"; bot_id: number }
+  | { type: "restart_game" };
 
 // -- display helpers ---------------------------------------------------
 
@@ -161,6 +163,10 @@ export function partnerOf(playerId: number): number {
 
 export function playerColor(teams: Record<number, TeamMeta>, playerId: number): string {
   return teams[teamOf(playerId)].color;
+}
+
+export function teamLabel(teams: Record<number, TeamMeta>, teamId: number): string {
+  return teams[teamId]?.name ?? (teamId === 0 ? "Team A" : "Team B");
 }
 
 export function suitSymbol(suit: Suit): string {

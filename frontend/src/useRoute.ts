@@ -10,6 +10,7 @@ function parseRoomCode(pathname: string): string | null {
 export interface Route {
   roomCode: string | null;
   goToRoom: (code: string) => void;
+  goHome: () => void;
 }
 
 // Two "pages" (landing, room) don't justify pulling in a router library -
@@ -28,5 +29,10 @@ export function useRoute(): Route {
     setRoomCode(code);
   }, []);
 
-  return { roomCode, goToRoom };
+  const goHome = useCallback(() => {
+    window.history.pushState(null, "", "/");
+    setRoomCode(null);
+  }, []);
+
+  return { roomCode, goToRoom, goHome };
 }

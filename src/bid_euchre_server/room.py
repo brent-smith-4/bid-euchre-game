@@ -18,7 +18,7 @@ from fastapi import WebSocket
 
 from bid_euchre.models import NUM_PLAYERS
 from bid_euchre_server.connection_manager import ConnectionManager, GameFullError
-from bid_euchre_server.session import GameSession
+from bid_euchre_server.session import GameSession, Phase
 
 _CODE_CHARSET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # excludes 0/O, 1/I/L - unambiguous by eye
 _CODE_LENGTH = 6
@@ -183,6 +183,21 @@ class Room:
         self.game_to_lobby = {game_id: lobby_id for lobby_id, game_id in self.lobby_to_game.items()}
         self.session = GameSession(target_score=self.target_score, first_dealer_id=0)
         self.status = RoomStatus.IN_GAME
+
+    def restart_game(self, player_id: int) -> None:
+        """Start a brand new match in this same room - same seats, teams,
+        colors, and bots as the match that just ended, scores back to 0.
+        Only legal once the previous match has actually finished, so a
+        restart never discards a game still in progress.
+        """
+        if self.status is not RoomStatus.IN_GAME or self.session is None:
+            raise ValueError("not in a game")
+        if self.session.phase is not Phase.GAME_OVER:
+            raise ValueError("game is not over yet")
+        if player_id != self.host_id:
+            raise ValueError("only the host may restart the game")
+
+        self.session = GameSession(target_score=self.target_score, first_dealer_id=0)
 
 
 class RoomRegistry:

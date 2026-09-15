@@ -15,9 +15,10 @@ import { useTrickDisplay } from "../useTrickDisplay";
 
 interface GameRoomProps {
   roomCode: string;
+  onGoHome: () => void;
 }
 
-export function GameRoom({ roomCode }: GameRoomProps) {
+export function GameRoom({ roomCode, onGoHome }: GameRoomProps) {
   const {
     status,
     yourPlayerId,
@@ -35,6 +36,7 @@ export function GameRoom({ roomCode }: GameRoomProps) {
     sendStartGame,
     sendAddBot,
     sendRemoveBot,
+    sendRestartGame,
     dismissError,
   } = useGameSocket(roomCode);
   const roundBanner = useRoundBanner(state);
@@ -81,6 +83,7 @@ export function GameRoom({ roomCode }: GameRoomProps) {
         onStartGame={sendStartGame}
         onAddBot={sendAddBot}
         onRemoveBot={sendRemoveBot}
+        onLeaveRoom={onGoHome}
       />
     );
   }
@@ -124,7 +127,14 @@ export function GameRoom({ roomCode }: GameRoomProps) {
       />
 
       {state.phase === "GAME_OVER" ? (
-        <GameOverScreen scores={state.scores} yourTeam={yourTeam} />
+        <GameOverScreen
+          scores={state.scores}
+          yourTeam={yourTeam}
+          teams={state.teams}
+          isHost={state.is_host}
+          onRestartGame={sendRestartGame}
+          onGoHome={onGoHome}
+        />
       ) : (
         <>
           <Table state={state} yourPlayerId={yourPlayerId} displayedTrick={displayedTrick} />
@@ -164,7 +174,7 @@ export function GameRoom({ roomCode }: GameRoomProps) {
 
           {state.phase === "PLAYING" && isSittingOutPartner && (
             <div className="sitting-out-note">
-              You're sitting out this hand — {playerName(state.winning_bid!.player_id)} is playing{" "}
+              You're sitting out this hand - {playerName(state.winning_bid!.player_id)} is playing{" "}
               {bidLabel(state.winning_bid!.rung)} solo.
             </div>
           )}

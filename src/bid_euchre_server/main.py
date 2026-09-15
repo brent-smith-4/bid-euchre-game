@@ -195,7 +195,13 @@ async def broadcast_room(room: Room) -> None:
     assert session is not None
     bots_in_game_ids = {room.lobby_to_game[lobby_id] for lobby_id in room.bot_ids}
     await room.connections.broadcast(
-        lambda lobby_id: build_state_view(session, room.lobby_to_game[lobby_id], room.teams, bots_in_game_ids)
+        lambda lobby_id: build_state_view(
+            session,
+            room.lobby_to_game[lobby_id],
+            room.teams,
+            bots_in_game_ids,
+            lobby_id == room.host_id,
+        )
     )
 
 
@@ -231,6 +237,8 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str) -> None:
             try:
                 if room.status is RoomStatus.LOBBY:
                     handle_lobby_message(room, player_id, message)
+                elif message.get("type") == "restart_game":
+                    room.restart_game(player_id)
                 else:
                     session = room.session
                     assert session is not None

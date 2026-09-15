@@ -24,6 +24,7 @@ export interface GameSocket {
   sendStartGame: () => void;
   sendAddBot: () => void;
   sendRemoveBot: (botId: number) => void;
+  sendRestartGame: () => void;
   dismissError: () => void;
 }
 
@@ -113,6 +114,7 @@ export function useGameSocket(roomCode: string | null): GameSocket {
   const sendStartGame = useCallback(() => send({ type: "start_game" }), [send]);
   const sendAddBot = useCallback(() => send({ type: "add_bot" }), [send]);
   const sendRemoveBot = useCallback((botId: number) => send({ type: "remove_bot", bot_id: botId }), [send]);
+  const sendRestartGame = useCallback(() => send({ type: "restart_game" }), [send]);
   const dismissError = useCallback(() => setError(null), []);
 
   return {
@@ -132,6 +134,7 @@ export function useGameSocket(roomCode: string | null): GameSocket {
     sendStartGame,
     sendAddBot,
     sendRemoveBot,
+    sendRestartGame,
     dismissError,
   };
 }

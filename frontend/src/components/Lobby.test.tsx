@@ -30,6 +30,7 @@ const commonHandlers = {
   onStartGame: noop,
   onAddBot: noop,
   onRemoveBot: noop,
+  onLeaveRoom: noop,
 };
 
 describe("Lobby", () => {

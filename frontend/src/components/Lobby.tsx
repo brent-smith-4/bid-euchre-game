@@ -12,6 +12,7 @@ interface LobbyProps {
   onStartGame: () => void;
   onAddBot: () => void;
   onRemoveBot: (botId: number) => void;
+  onLeaveRoom: () => void;
 }
 
 const TEAM_IDS = [0, 1];
@@ -26,6 +27,7 @@ export function Lobby({
   onStartGame,
   onAddBot,
   onRemoveBot,
+  onLeaveRoom,
 }: LobbyProps) {
   const yourTeam = lobbyState.players[yourPlayerId];
   const teamCounts = TEAM_IDS.map(
@@ -80,7 +82,7 @@ export function Lobby({
             </button>
             {!canStart && (
               <p className="lobby-hint">
-                Need 2 players on each team to start (4 total) — currently {teamCounts[0]} on Team A,{" "}
+                Need 2 players on each team to start (4 total) - currently {teamCounts[0]} on Team A,{" "}
                 {teamCounts[1]} on Team B.
               </p>
             )}
@@ -90,6 +92,9 @@ export function Lobby({
             Target score: {lobbyState.target_score}. Waiting for the host to start the game...
           </p>
         )}
+        <button type="button" onClick={onLeaveRoom}>
+          Leave room
+        </button>
       </div>
     </div>
   );

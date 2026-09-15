@@ -4,6 +4,7 @@ builds. WebSocket wiring itself is covered by test_main.py.
 """
 
 from bid_euchre_server.room import RoomRegistry, RoomStatus, TEAM_A, TEAM_B
+from bid_euchre_server.session import Phase
 
 import pytest
 
@@ -216,6 +217,35 @@ def test_bots_count_toward_start_games_two_per_team_requirement() -> None:
     room.start_game(host)
 
     assert room.status is RoomStatus.IN_GAME
+
+
+def test_restart_game_requires_the_match_to_be_over() -> None:
+    room, ids = _join_full_room()
+    room.start_game(room.host_id)
+
+    with pytest.raises(ValueError):
+        room.restart_game(room.host_id)
+
+
+def test_restart_game_is_host_only_and_resets_scores_but_keeps_seats() -> None:
+    room, ids = _join_full_room()
+    room.start_game(room.host_id)
+    non_host = next(p for p in ids if p != room.host_id)
+    old_lobby_to_game = dict(room.lobby_to_game)
+
+    assert room.session is not None
+    room.session.phase = Phase.GAME_OVER
+    room.session.state.scores = {TEAM_A: 60, TEAM_B: 12}
+
+    with pytest.raises(ValueError):
+        room.restart_game(non_host)
+
+    room.restart_game(room.host_id)
+
+    assert room.status is RoomStatus.IN_GAME
+    assert room.session.phase is Phase.BIDDING
+    assert room.session.state.scores == {TEAM_A: 0, TEAM_B: 0}
+    assert room.lobby_to_game == old_lobby_to_game  # same seats/teams carried over
 
 
 def test_remove_bot_frees_its_seat_and_is_host_only() -> None:
