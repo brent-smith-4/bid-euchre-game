@@ -226,10 +226,27 @@ has zero knowledge bots exist.
   `_begin_trick_play` and incremented alongside it in `play_card`), threaded into
   `build_state_view` as `tricks_won` and consumed by `Table`/`Seat`.
 
+## Rule change — MOON's partner sits out too
+- **MOON now plays exactly like ALONE: the bidder's partner does not play any cards, only the
+  pre-play blind swap.** Originally (and per CLAUDE.md's original text) MOON's partner played
+  normally after the swap; the user decided in testing that read wrong and asked for parity with
+  ALONE. `trick.py`'s `active_players`/`trick_play_order` now exclude the partner for both
+  `BidRung.MOON` and `BidRung.ALONE` (`_SOLO_RUNGS`) instead of ALONE alone. The only remaining
+  differences between the two bids are the swap itself and the point value (12 vs 24) — MOON is
+  now "ALONE, but your partner hands you one assist card first, for half the points."
+  Investigated but could **not** reproduce a separate bug report that ALONE's partner was already
+  playing — drove full ALONE hands through both `GameSession` directly and the real WS + bot
+  layer, and the partner never got a turn in either case. Added regression tests at all 3 layers
+  (`test_trick.py`, `test_session.py`, `test_main.py`) covering both MOON and ALONE. Frontend:
+  `GameRoom` now hides the generic `Hand` panel and shows a "You're sitting out this hand" note
+  for the MOON/ALONE partner during `PLAYING`, instead of rendering their hand as a normal-looking
+  but silently inert set of cards.
+
 ## Current test coverage
-- Backend: 136 tests (`pytest`), mypy strict clean. Includes a 500-hand fuzz test asserting
-  `choose_card_to_play` never produces an illegal card, and an end-to-end WebSocket test where a
-  lone human plus 3 bots resolve an entire bidding round on their own.
+- Backend: 141 tests (`pytest`), mypy strict clean. Includes a 500-hand fuzz test asserting
+  `choose_card_to_play` never produces an illegal card, and end-to-end WebSocket tests where a
+  lone human plus 3 bots resolve an entire bidding round on their own, and where MOON/ALONE's
+  partner never gets a turn over the real WS layer.
 - Frontend: 44 tests (`vitest`), `tsc` build and `oxlint` clean.
 
 ## Out of scope for now

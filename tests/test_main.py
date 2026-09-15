@@ -441,6 +441,88 @@ def test_bots_resolve_their_own_turns_over_the_real_ws_layer() -> None:
         assert state["phase"] in ("PLAYING", "MOON_SWAP", "GAME_OVER")
 
 
+def _assert_solo_partner_never_plays(states: list[dict[str, Any]], sockets: list[WebSocketTestSession]) -> None:
+    """Given the just-completed call_trump broadcast (phase already PLAYING,
+    partner_of(1) == 3 sitting out), play the entire hand and assert player
+    3 never gets a turn and their hand never shrinks - this is the actual
+    WS + broadcast layer the partner-still-plays bug was reported at, not
+    just GameSession driven directly (see test_session.py's equivalent,
+    layer-agnostic checks).
+    """
+    assert states[0]["phase"] == "PLAYING"
+    for _ in range(6 * 3):  # 6 tricks, 3 active plays each for a solo hand
+        turn = states[0]["player_turn"]
+        if turn is None:
+            break
+        assert turn != 3
+        assert states[3]["hand_sizes"]["3"] == 6
+        card = states[turn]["legal_plays"][0]
+        sockets[turn].send_json({"type": "play_card", "card": card})
+        states = _drain_all(sockets, 1)
+
+    assert states[3]["hand_sizes"]["3"] == 6
+
+
+def test_alone_partner_never_plays_over_the_real_ws_layer() -> None:
+    client = TestClient(main_module.app)
+    code = _create_room(client)
+    with (
+        client.websocket_connect(f"/ws/{code}") as ws0,
+        client.websocket_connect(f"/ws/{code}") as ws1,
+        client.websocket_connect(f"/ws/{code}") as ws2,
+        client.websocket_connect(f"/ws/{code}") as ws3,
+    ):
+        sockets = [ws0, ws1, ws2, ws3]
+        _join_and_start_game(client, code, sockets)
+
+        # dealer is player 0 -> bid order [1, 2, 3, 0]; player 1 bids ALONE,
+        # partner_of(1) == 3 sits out entirely.
+        ws1.send_json({"type": "bid", "rung": "ALONE"})
+        _drain_all(sockets, 1)
+        for ws in (ws2, ws3, ws0):
+            ws.send_json({"type": "bid", "rung": "PASS"})
+            _drain_all(sockets, 1)
+
+        ws1.send_json({"type": "call_trump", "mode": "HIGH", "suit": None, "swap_out_card": None})
+        states = _drain_all(sockets, 1)
+
+        _assert_solo_partner_never_plays(states, sockets)
+
+
+def test_moon_partner_never_plays_over_the_real_ws_layer() -> None:
+    client = TestClient(main_module.app)
+    code = _create_room(client)
+    with (
+        client.websocket_connect(f"/ws/{code}") as ws0,
+        client.websocket_connect(f"/ws/{code}") as ws1,
+        client.websocket_connect(f"/ws/{code}") as ws2,
+        client.websocket_connect(f"/ws/{code}") as ws3,
+    ):
+        sockets = [ws0, ws1, ws2, ws3]
+        _join_and_start_game(client, code, sockets)
+
+        # dealer is player 0 -> bid order [1, 2, 3, 0]; player 1 bids MOON,
+        # partner_of(1) == 3 sits out after the swap.
+        ws1.send_json({"type": "bid", "rung": "MOON"})
+        _drain_all(sockets, 1)
+        for ws in (ws2, ws3, ws0):
+            ws.send_json({"type": "bid", "rung": "PASS"})
+            _drain_all(sockets, 1)
+
+        room = main_module.registry.get(code)
+        assert room is not None and room.session is not None
+        bidder_card = room.session.state.hands[1][0]
+        ws1.send_json({"type": "call_trump", "mode": "HIGH", "swap_out_card": card_to_json(bidder_card)})
+        states = _drain_all(sockets, 1)
+        assert states[0]["phase"] == "MOON_SWAP"
+
+        partner_card = room.session.state.hands[3][0]
+        ws3.send_json({"type": "submit_moon_swap_card", "card": card_to_json(partner_card)})
+        states = _drain_all(sockets, 1)
+
+        _assert_solo_partner_never_plays(states, sockets)
+
+
 def test_room_becomes_full_again_error_once_in_game() -> None:
     client = TestClient(main_module.app)
     code = _create_room(client)

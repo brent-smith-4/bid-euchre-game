@@ -31,7 +31,8 @@ export function MoonSwapPanel({ isYourTurn, isBidder, yourHand, onSubmitSwapCard
     <div className="moon-swap-panel">
       <p>
         Your partner is shooting the moon and has picked a card to give you (you won't know which
-        until the trade happens). Pick one of your own cards to send back:
+        until the trade happens). Pick one of your own cards to send back — you'll sit out the
+        rest of the hand once you confirm:
       </p>
       <div className="hand">
         {yourHand.map((card) => (

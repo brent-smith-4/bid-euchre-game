@@ -241,9 +241,9 @@ class GameSession:
         self._last_trick_cards = None
         # The first trick is led by the player left of the dealer - the same
         # seat that led off bidding (self._bid_order[0]) - not by the bid
-        # winner. If that seat is the sitting-out partner of an ALONE bid,
-        # trick_play_order's active-player filter naturally skips them and
-        # the next active player clockwise leads instead.
+        # winner. If that seat is the sitting-out partner of a MOON/ALONE
+        # bid, trick_play_order's active-player filter naturally skips them
+        # and the next active player clockwise leads instead.
         self._trick_order = trick_play_order(self._bid_order[0], winning_bid)
         self._trick_turn_index = 0
         self.phase = Phase.PLAYING

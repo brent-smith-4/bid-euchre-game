@@ -402,8 +402,23 @@ def test_moon_swap_full_flow_stays_blind_and_transitions_to_playing() -> None:
     assert session.moon_swap_turn is None
     assert partner_card in session.state.hands[bidder_id]
     assert bidder_card in session.state.hands[partner_id]
-    assert bidder_card not in session.state.hands[bidder_id]
-    assert partner_card not in session.state.hands[partner_id]
+
+
+def test_moon_bid_excludes_partner_from_trick_turns() -> None:
+    """MOON, like ALONE, plays the bidder solo - the partner's only
+    contribution is the pre-play blind swap (see the test above), not
+    actually playing tricks.
+    """
+    session = GameSession()
+    bidder_id = _bid_moon_and_win(session)
+    partner_id = partner_of(bidder_id)
+    bidder_card = session.state.hands[bidder_id][0]
+    session.call_trump(bidder_id, TrumpCall(mode=TrumpMode.HIGH), swap_out_card=bidder_card)
+    session.submit_moon_swap_card(partner_id, session.state.hands[partner_id][0])
+
+    assert session.phase is Phase.PLAYING
+    assert partner_id not in session._trick_order  # noqa: SLF001
+    assert len(session._trick_order) == 3  # noqa: SLF001
 
 
 def test_only_the_bidders_partner_may_submit_the_moon_swap_card() -> None:

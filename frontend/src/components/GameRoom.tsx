@@ -8,7 +8,7 @@ import { ScoreBoard } from "./ScoreBoard";
 import { Table } from "./Table";
 import { Toast } from "./Toast";
 import { TrumpCallPanel } from "./TrumpCallPanel";
-import { bidLabel, playerColor, playerName, suitSymbol } from "../protocol";
+import { bidLabel, partnerOf, playerColor, playerName, suitSymbol } from "../protocol";
 import { useGameSocket } from "../useGameSocket";
 import { useRoundBanner } from "../useRoundBanner";
 import { useTrickDisplay } from "../useTrickDisplay";
@@ -90,12 +90,25 @@ export function GameRoom({ roomCode }: GameRoomProps) {
   const isYourPlayTurn = state.player_turn === yourPlayerId;
   const isBidWinner = state.winning_bid?.player_id === yourPlayerId;
   const isMoonBid = state.winning_bid?.rung === "MOON";
+  const isAloneBid = state.winning_bid?.rung === "ALONE";
   const isYourMoonSwapTurn = state.moon_swap_turn === yourPlayerId;
+  // MOON and ALONE both play the bidder solo - their partner sits out the
+  // hand entirely (MOON's partner only contributes the pre-play blind
+  // swap). Server-side this already falls out of GameSession.player_turn
+  // never landing on the sitting-out seat, but the generic Hand panel would
+  // otherwise still render their cards as an inert, unexplained hand.
+  const isSittingOutPartner =
+    (isMoonBid || isAloneBid) &&
+    state.winning_bid !== null &&
+    yourPlayerId === partnerOf(state.winning_bid.player_id);
   // Hide the generic hand display while TrumpCallPanel/MoonSwapPanel are
   // already showing an interactive card-picker for this viewer, so the
-  // same cards don't render twice on screen.
+  // same cards don't render twice on screen - or while sitting out a
+  // MOON/ALONE hand entirely.
   const hideGenericHand =
-    state.phase === "MOON_SWAP" || (state.phase === "CALLING_TRUMP" && isMoonBid && isBidWinner);
+    state.phase === "MOON_SWAP" ||
+    (state.phase === "CALLING_TRUMP" && isMoonBid && isBidWinner) ||
+    (state.phase === "PLAYING" && isSittingOutPartner);
 
   return (
     <div className="app">
@@ -147,6 +160,13 @@ export function GameRoom({ roomCode }: GameRoomProps) {
               yourHand={state.your_hand}
               onSubmitSwapCard={sendSubmitMoonSwapCard}
             />
+          )}
+
+          {state.phase === "PLAYING" && isSittingOutPartner && (
+            <div className="sitting-out-note">
+              You're sitting out this hand — {playerName(state.winning_bid!.player_id)} is playing{" "}
+              {bidLabel(state.winning_bid!.rung)} solo.
+            </div>
           )}
 
           {!hideGenericHand && (

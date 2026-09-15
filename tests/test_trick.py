@@ -117,7 +117,19 @@ def test_active_players_alone_excludes_partner() -> None:
     assert active_players(bid) == [0, 1, 2]  # player 3 is partner of 1, excluded
 
 
+def test_active_players_moon_also_excludes_partner() -> None:
+    # MOON plays the bidder solo too - the swap is the partner's only
+    # contribution, same exclusion as ALONE.
+    bid = Bid(player_id=1, rung=BidRung.MOON)
+    assert active_players(bid) == [0, 1, 2]  # player 3 is partner of 1, excluded
+
+
 def test_trick_play_order_alone_skips_partner_and_wraps_clockwise() -> None:
     bid = Bid(player_id=1, rung=BidRung.ALONE)
     # leader is player 2; clockwise order 2,3,0,1 but 3 (partner of bidder 1) sits out
+    assert trick_play_order(leader_id=2, winning_bid=bid) == [2, 0, 1]
+
+
+def test_trick_play_order_moon_skips_partner_and_wraps_clockwise() -> None:
+    bid = Bid(player_id=1, rung=BidRung.MOON)
     assert trick_play_order(leader_id=2, winning_bid=bid) == [2, 0, 1]

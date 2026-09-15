@@ -40,14 +40,21 @@ def validate_play(card: Card, hand: Hand, lead_suit: Suit | None, trump: TrumpCa
         raise IllegalPlayError("must follow suit")
 
 
+_SOLO_RUNGS = frozenset({BidRung.MOON, BidRung.ALONE})
+
+
 def active_players(winning_bid: Bid) -> list[int]:
     """Player ids who actually play cards this hand.
 
-    Normally all 4; if the winning bid is ALONE, the bidder's partner sits
-    out entirely (their dealt hand still exists in HandState, it's just
-    never played from or included in turn order).
+    Normally all 4; for MOON or ALONE, the bidder's partner sits out
+    entirely (their dealt hand still exists in HandState, it's just never
+    played from or included in turn order) - the bidder plays the whole
+    hand alone either way. The only difference between the two is the
+    pre-play blind card swap (MOON only, see GameSession.call_trump /
+    submit_moon_swap_card) and the point value (12 vs 24) - MOON gets one
+    assist card from the partner for half of ALONE's payout.
     """
-    if winning_bid.rung is BidRung.ALONE:
+    if winning_bid.rung in _SOLO_RUNGS:
         excluded = partner_of(winning_bid.player_id)
         return [p for p in range(NUM_PLAYERS) if p != excluded]
     return list(range(NUM_PLAYERS))
@@ -55,8 +62,8 @@ def active_players(winning_bid: Bid) -> list[int]:
 
 def trick_play_order(leader_id: int, winning_bid: Bid) -> list[int]:
     """Clockwise play order for one trick starting at `leader_id`, skipping
-    the sitting-out partner when the winning bid is ALONE (so an alone hand's
-    tricks naturally end up with 3 plays instead of 4).
+    the sitting-out partner for MOON/ALONE (so those hands' tricks naturally
+    end up with 3 plays instead of 4).
     """
     active = set(active_players(winning_bid))
     clockwise = ((leader_id + offset) % NUM_PLAYERS for offset in range(NUM_PLAYERS))

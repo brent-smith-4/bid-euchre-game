@@ -23,6 +23,13 @@
   opacity: 0.85;
 }
 
+.sitting-out-note {
+  font-size: 0.95rem;
+  opacity: 0.85;
+  text-align: center;
+  padding: 0.5rem;
+}
+
 /* -- landing ------------------------------------------------------------- */
 
 .landing {

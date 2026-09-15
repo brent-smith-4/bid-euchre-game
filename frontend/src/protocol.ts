@@ -155,6 +155,10 @@ export function teamOf(playerId: number): number {
   return playerId % 2;
 }
 
+export function partnerOf(playerId: number): number {
+  return (playerId + 2) % 4;
+}
+
 export function playerColor(teams: Record<number, TeamMeta>, playerId: number): string {
   return teams[teamOf(playerId)].color;
 }
@@ -183,10 +187,11 @@ const BID_DESCRIPTION: Record<BidRung, string> = {
   FOUR: "Commit to winning at least 4 of the 6 tricks with your partner.",
   FIVE: "Commit to winning at least 5 of the 6 tricks with your partner.",
   SIX: "Commit to winning all 6 tricks with your partner.",
-  MOON: "Shoot the Moon: commit to winning all 6 tricks. Worth 12 points if made, -12 if set. " +
-    "You may swap one hidden card with your partner after calling trump.",
-  ALONE: "Go Alone: commit to winning all 6 tricks by yourself - your partner sits out this hand. " +
-    "Worth 24 points if made, -24 if set.",
+  MOON: "Shoot the Moon: commit to winning all 6 tricks by yourself - your partner sits out this " +
+    "hand, but swaps one hidden card with you first after you call trump. Worth 12 points if " +
+    "made, -12 if set.",
+  ALONE: "Go Alone: commit to winning all 6 tricks by yourself - your partner sits out this hand, " +
+    "with no card swap first. Worth 24 points if made, -24 if set.",
 };
 
 export function bidDescription(rung: BidRung): string {
