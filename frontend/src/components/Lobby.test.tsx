@@ -11,9 +11,10 @@ function makeLobby(overrides: Partial<LobbyState> = {}): LobbyState {
     host_id: 0,
     target_score: 52,
     players: { 0: 0, 1: 1, 2: 0, 3: 1 },
+    player_names: {},
     teams: {
-      0: { color: "#3366cc", name: null, naming_rights_holder: 0 },
-      1: { color: "#cc3333", name: null, naming_rights_holder: 1 },
+      0: { color: "#0a84ff", name: null, naming_rights_holder: 0 },
+      1: { color: "#ff3b30", name: null, naming_rights_holder: 1 },
     },
     bots: [],
     ...overrides,
@@ -31,6 +32,7 @@ const commonHandlers = {
   onAddBot: noop,
   onRemoveBot: noop,
   onLeaveRoom: noop,
+  onSetPlayerName: noop,
 };
 
 describe("Lobby", () => {
@@ -41,20 +43,20 @@ describe("Lobby", () => {
     );
 
     // player 0 is on team 0; only players on team 1 (Bravo, Delta) get a swap button.
-    const swapButtons = screen.getAllByRole("button", { name: /swap with me/i });
+    const swapButtons = screen.getAllByRole("button", { name: /^swap$/i });
     expect(swapButtons).toHaveLength(2);
 
     fireEvent.click(swapButtons[0]);
     expect(onSwapTeam).toHaveBeenCalledWith(1);
   });
 
-  it("only enables a team's color input for players seated on that team", () => {
+  it("only enables a team's color select for players seated on that team", () => {
     render(<Lobby lobbyState={makeLobby()} yourPlayerId={0} {...commonHandlers} />);
 
-    const colorInputs = document.querySelectorAll('input[type="color"]');
-    expect(colorInputs).toHaveLength(2);
-    expect(colorInputs[0]).toBeEnabled(); // team 0 - you're on it
-    expect(colorInputs[1]).toBeDisabled(); // team 1 - you're not
+    const colorSelects = document.querySelectorAll("select");
+    expect(colorSelects).toHaveLength(2);
+    expect(colorSelects[0]).toBeEnabled(); // team 0 - you're on it
+    expect(colorSelects[1]).toBeDisabled(); // team 1 - you're not
   });
 
   it("only enables a team's name input for that team's naming-rights holder", () => {

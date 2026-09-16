@@ -9,7 +9,6 @@ ConnectionManager instance.
 
 from __future__ import annotations
 
-import re
 import secrets
 from dataclasses import dataclass
 from enum import Enum, auto
@@ -23,11 +22,24 @@ from bid_euchre_server.session import GameSession, Phase
 _CODE_CHARSET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # excludes 0/O, 1/I/L - unambiguous by eye
 _CODE_LENGTH = 6
 
-_HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
-
 TEAM_A = 0
 TEAM_B = 1
-_DEFAULT_COLORS = {TEAM_A: "#3366cc", TEAM_B: "#cc3333"}
+
+# The only colors a team may pick: bright variants of the 3 primary + 3
+# secondary colors, offered to players as a fixed dropdown rather than a
+# free-form color picker (see Lobby.tsx) - validated again here so a
+# tampered client can't smuggle in an arbitrary color.
+TEAM_COLORS = {
+    "#ff3b30": "Red",
+    "#ff9500": "Orange",
+    "#ffcc00": "Yellow",
+    "#34c759": "Green",
+    "#0a84ff": "Blue",
+    "#af52de": "Purple",
+}
+_DEFAULT_COLORS = {TEAM_A: "#0a84ff", TEAM_B: "#ff3b30"}
+
+_MAX_PLAYER_NAME_LENGTH = 20
 
 
 class RoomStatus(Enum):
@@ -51,6 +63,12 @@ class Room:
             TEAM_B: TeamMeta(color=_DEFAULT_COLORS[TEAM_B]),
         }
         self.player_team: dict[int, int] = {}
+        # Custom display names, keyed by lobby id (the stable identity for a
+        # connection - see lobby_to_game) so a player's chosen name follows
+        # them from the lobby into the game regardless of which fixed-seat
+        # game id they end up assigned to. Absent entries fall back to the
+        # cosmetic Alpha/Bravo/Charlie/Delta labels (see protocol.ts).
+        self.player_names: dict[int, str] = {}
         self.target_score = 52
         self.session: GameSession | None = None
         # Fixed once start_game() runs: lobby seat (connection order) -> the
@@ -95,6 +113,7 @@ class Room:
 
     def forget_player(self, player_id: int) -> None:
         self.player_team.pop(player_id, None)
+        self.player_names.pop(player_id, None)
 
     def add_bot(self, requester_id: int) -> int:
         self._require_lobby()
@@ -141,8 +160,8 @@ class Room:
             raise ValueError("invalid team")
         if self.player_team.get(player_id) != team:
             raise ValueError("only players on that team may change its color")
-        if not _HEX_COLOR.match(color):
-            raise ValueError("color must be a hex string like #3366cc")
+        if color not in TEAM_COLORS:
+            raise ValueError("color must be one of the offered swatches")
         self.teams[team].color = color
 
     def set_team_name(self, player_id: int, team: int, name: str) -> None:
@@ -153,6 +172,14 @@ class Room:
             raise ValueError("only that team's first player may set its name")
         name = name.strip()
         self.teams[team].name = name or None
+
+    def set_player_name(self, player_id: int, name: str) -> None:
+        self._require_lobby()
+        name = name.strip()[:_MAX_PLAYER_NAME_LENGTH]
+        if name:
+            self.player_names[player_id] = name
+        else:
+            self.player_names.pop(player_id, None)
 
     def set_target_score(self, player_id: int, value: int) -> None:
         self._require_lobby()

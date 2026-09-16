@@ -95,18 +95,20 @@ def test_only_players_on_a_team_may_set_its_color() -> None:
     room, ids = _join_full_room()
     outsider = next(p for p in ids if room.player_team[p] != TEAM_A)
     with pytest.raises(ValueError):
-        room.set_team_color(outsider, TEAM_A, "#123456")
+        room.set_team_color(outsider, TEAM_A, "#ff9500")
 
     member = next(p for p in ids if room.player_team[p] == TEAM_A)
-    room.set_team_color(member, TEAM_A, "#123456")
-    assert room.teams[TEAM_A].color == "#123456"
+    room.set_team_color(member, TEAM_A, "#ff9500")
+    assert room.teams[TEAM_A].color == "#ff9500"
 
 
-def test_set_team_color_rejects_non_hex_values() -> None:
+def test_set_team_color_rejects_colors_outside_the_offered_swatches() -> None:
     room, ids = _join_full_room()
     member = next(p for p in ids if room.player_team[p] == TEAM_A)
     with pytest.raises(ValueError):
         room.set_team_color(member, TEAM_A, "blue")
+    with pytest.raises(ValueError):
+        room.set_team_color(member, TEAM_A, "#123456")  # a hex color, but not an offered swatch
 
 
 def test_only_naming_rights_holder_may_set_team_name() -> None:
@@ -119,6 +121,20 @@ def test_only_naming_rights_holder_may_set_team_name() -> None:
 
     room.set_team_name(holder, TEAM_A, "The Aces")
     assert room.teams[TEAM_A].name == "The Aces"
+
+
+def test_set_player_name_trims_caps_length_and_clears_on_blank() -> None:
+    room, ids = _join_full_room()
+    player = ids[0]
+
+    room.set_player_name(player, "  Brent  ")
+    assert room.player_names[player] == "Brent"
+
+    room.set_player_name(player, "x" * 50)
+    assert room.player_names[player] == "x" * 20
+
+    room.set_player_name(player, "   ")
+    assert player not in room.player_names
 
 
 def test_only_host_may_set_target_score_and_start_game() -> None:

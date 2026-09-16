@@ -32,6 +32,7 @@ function makeState(overrides: Partial<StateView>): StateView {
     teams: { 0: { color: "#3366cc", name: null }, 1: { color: "#cc3333", name: null } },
     bots: [],
     is_host: false,
+    player_names: {},
     ...overrides,
   };
 }

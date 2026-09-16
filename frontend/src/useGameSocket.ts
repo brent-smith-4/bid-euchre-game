@@ -20,6 +20,7 @@ export interface GameSocket {
   sendSwapTeam: (withPlayerId: number) => void;
   sendSetTeamColor: (team: number, color: string) => void;
   sendSetTeamName: (team: number, name: string) => void;
+  sendSetPlayerName: (name: string) => void;
   sendSetTargetScore: (value: number) => void;
   sendStartGame: () => void;
   sendAddBot: () => void;
@@ -107,6 +108,7 @@ export function useGameSocket(roomCode: string | null): GameSocket {
     (team: number, name: string) => send({ type: "set_team_name", team, name }),
     [send],
   );
+  const sendSetPlayerName = useCallback((name: string) => send({ type: "set_player_name", name }), [send]);
   const sendSetTargetScore = useCallback(
     (value: number) => send({ type: "set_target_score", value }),
     [send],
@@ -130,6 +132,7 @@ export function useGameSocket(roomCode: string | null): GameSocket {
     sendSwapTeam,
     sendSetTeamColor,
     sendSetTeamName,
+    sendSetPlayerName,
     sendSetTargetScore,
     sendStartGame,
     sendAddBot,

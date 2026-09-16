@@ -32,6 +32,7 @@ export function GameRoom({ roomCode, onGoHome }: GameRoomProps) {
     sendSwapTeam,
     sendSetTeamColor,
     sendSetTeamName,
+    sendSetPlayerName,
     sendSetTargetScore,
     sendStartGame,
     sendAddBot,
@@ -45,20 +46,32 @@ export function GameRoom({ roomCode, onGoHome }: GameRoomProps) {
   const bannerEvent = roundBanner.event;
   const bannerColor =
     bannerWinnerId !== null && state !== null ? playerColor(state.teams, bannerWinnerId) : null;
+  const bannerName = bannerWinnerId !== null ? playerName(bannerWinnerId, state?.player_names) : null;
   // Memoized so the Toast's auto-dismiss timer (keyed on message identity)
   // doesn't reset on every unrelated state broadcast - only when the
-  // winner/event this banner is announcing actually changes.
+  // winner/event this banner is announcing actually changes. bannerName is
+  // a primitive string (not the state.player_names object itself), so it
+  // only changes value when the winner's actual display name does.
   const roundBannerMessage = useMemo(() => {
-    if (bannerWinnerId === null || bannerEvent === null || bannerColor === null) return null;
+    if (bannerWinnerId === null || bannerEvent === null || bannerColor === null || bannerName === null) {
+      return null;
+    }
     return (
       <>
-        <span style={{ color: bannerColor }}>{playerName(bannerWinnerId)}</span> won the {bannerEvent}
+        <span style={{ color: bannerColor }}>{bannerName}</span> won the {bannerEvent}
       </>
     );
-  }, [bannerWinnerId, bannerEvent, bannerColor]);
+  }, [bannerWinnerId, bannerEvent, bannerColor, bannerName]);
 
   if (status === "not_found") {
-    return <div className="status-screen">Room not found — check the code and try again.</div>;
+    return (
+      <div className="status-screen status-screen-column">
+        <p>Room not found - check the code and try again.</p>
+        <button type="button" className="felt-button" onClick={onGoHome}>
+          Home
+        </button>
+      </div>
+    );
   }
   if (status === "full") {
     return <div className="status-screen">This room is full, or the game already started.</div>;
@@ -79,6 +92,7 @@ export function GameRoom({ roomCode, onGoHome }: GameRoomProps) {
         onSwapTeam={sendSwapTeam}
         onSetTeamColor={sendSetTeamColor}
         onSetTeamName={sendSetTeamName}
+        onSetPlayerName={sendSetPlayerName}
         onSetTargetScore={sendSetTargetScore}
         onStartGame={sendStartGame}
         onAddBot={sendAddBot}
@@ -116,7 +130,7 @@ export function GameRoom({ roomCode, onGoHome }: GameRoomProps) {
   return (
     <div className="app">
       <div className="you-are">
-        Playing as <strong>{playerName(yourPlayerId)}</strong>
+        Playing as <strong>{playerName(yourPlayerId, state?.player_names)}</strong>
       </div>
 
       <ScoreBoard
@@ -147,7 +161,8 @@ export function GameRoom({ roomCode, onGoHome }: GameRoomProps) {
             )}
             {state.winning_bid && (
               <span>
-                Bid: {bidLabel(state.winning_bid.rung)} by {playerName(state.winning_bid.player_id)}
+                Bid: {bidLabel(state.winning_bid.rung)} by{" "}
+                {playerName(state.winning_bid.player_id, state.player_names)}
               </span>
             )}
           </div>
@@ -174,7 +189,8 @@ export function GameRoom({ roomCode, onGoHome }: GameRoomProps) {
 
           {state.phase === "PLAYING" && isSittingOutPartner && (
             <div className="sitting-out-note">
-              You're sitting out this hand - {playerName(state.winning_bid!.player_id)} is playing{" "}
+              You're sitting out this hand -{" "}
+              {playerName(state.winning_bid!.player_id, state.player_names)} is playing{" "}
               {bidLabel(state.winning_bid!.rung)} solo.
             </div>
           )}

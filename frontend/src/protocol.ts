@@ -69,6 +69,7 @@ export interface StateView {
   teams: Record<number, TeamMeta>;
   bots: number[];
   is_host: boolean;
+  player_names: Record<number, string>;
 }
 
 // The payload build_lobby_view sends, personalized per viewer, while a
@@ -80,6 +81,7 @@ export interface LobbyState {
   host_id: number | null;
   target_score: number;
   players: Record<number, number>; // player_id -> team (0/1)
+  player_names: Record<number, string>;
   teams: Record<number, LobbyTeamMeta>;
   bots: number[];
 }
@@ -104,6 +106,7 @@ export type ClientMessage =
   | { type: "swap_team"; with_player_id: number }
   | { type: "set_team_color"; team: number; color: string }
   | { type: "set_team_name"; team: number; name: string }
+  | { type: "set_player_name"; name: string }
   | { type: "set_target_score"; value: number }
   | { type: "start_game" }
   | { type: "add_bot" }
@@ -140,14 +143,28 @@ const BID_LABEL: Record<BidRung, string> = {
   ALONE: "Go Alone",
 };
 
-// Display-only call signs for seats 0-3. Purely cosmetic: the wire protocol
-// and every rules/turn-order check still identify players by their
-// player_id (int) - this never becomes a lookup key anywhere else.
+// Fallback call signs for seats 0-3, used until a player picks their own
+// name. Still purely cosmetic either way: the wire protocol and every
+// rules/turn-order check identify players by their player_id (int) - a
+// custom name (or this fallback) never becomes a lookup key anywhere else.
 const PLAYER_NAME = ["Alpha", "Bravo", "Charlie", "Delta"];
 
-export function playerName(playerId: number): string {
-  return PLAYER_NAME[playerId] ?? `Player ${playerId}`;
+export function playerName(playerId: number, names?: Record<number, string>): string {
+  return names?.[playerId] || PLAYER_NAME[playerId] || `Player ${playerId}`;
 }
+
+// The only colors a team may pick - bright variants of the 3 primary + 3
+// secondary colors, offered as a fixed dropdown (see Lobby.tsx) rather than
+// a free-form picker. Must match TEAM_COLORS in bid_euchre_server/room.py,
+// which re-validates server-side.
+export const TEAM_COLOR_OPTIONS: { label: string; value: string }[] = [
+  { label: "Red", value: "#ff3b30" },
+  { label: "Orange", value: "#ff9500" },
+  { label: "Yellow", value: "#ffcc00" },
+  { label: "Green", value: "#34c759" },
+  { label: "Blue", value: "#0a84ff" },
+  { label: "Purple", value: "#af52de" },
+];
 
 // Fixed partnerships: seats 0 & 2 are one team, 1 & 3 are the other -
 // mirrors bid_euchre.models.team_of exactly (a static seat-parity rule, not

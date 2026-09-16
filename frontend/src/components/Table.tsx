@@ -28,6 +28,7 @@ export function Table({ state, yourPlayerId, displayedTrick }: TableProps) {
           isDealer={state.dealer_id === playerId}
           isTurn={state.bidder_turn === playerId || state.player_turn === playerId}
           isBot={state.bots.includes(playerId)}
+          names={state.player_names}
         />
       ))}
       <TrickArea currentTrick={displayedTrick ?? state.current_trick} yourPlayerId={yourPlayerId} />

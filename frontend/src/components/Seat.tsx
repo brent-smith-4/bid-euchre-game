@@ -9,13 +9,14 @@ interface SeatProps {
   isDealer: boolean;
   isTurn: boolean;
   isBot: boolean;
+  names: Record<number, string>;
 }
 
-export function Seat({ position, playerId, color, tricksWon, isDealer, isTurn, isBot }: SeatProps) {
+export function Seat({ position, playerId, color, tricksWon, isDealer, isTurn, isBot, names }: SeatProps) {
   return (
     <div className={`seat seat-${position}${isTurn ? " active-turn" : ""}`}>
       <div className="seat-label">
-        <span style={{ color }}>{playerName(playerId)}</span>
+        <span style={{ color }}>{playerName(playerId, names)}</span>
         {isBot && <span className="bot-marker">(Bot)</span>}
         {isDealer && <span className="dealer-marker" title="Dealer">D</span>}
       </div>

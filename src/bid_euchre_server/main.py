@@ -91,6 +91,8 @@ def handle_lobby_message(room: Room, player_id: int, message: dict[str, Any]) ->
         room.set_team_color(player_id, message["team"], message["color"])
     elif msg_type == "set_team_name":
         room.set_team_name(player_id, message["team"], message["name"])
+    elif msg_type == "set_player_name":
+        room.set_player_name(player_id, message["name"])
     elif msg_type == "set_target_score":
         room.set_target_score(player_id, message["value"])
     elif msg_type == "start_game":
@@ -194,6 +196,11 @@ async def broadcast_room(room: Room) -> None:
     session = room.session
     assert session is not None
     bots_in_game_ids = {room.lobby_to_game[lobby_id] for lobby_id in room.bot_ids}
+    player_names_by_game_id = {
+        room.lobby_to_game[lobby_id]: name
+        for lobby_id, name in room.player_names.items()
+        if lobby_id in room.lobby_to_game
+    }
     await room.connections.broadcast(
         lambda lobby_id: build_state_view(
             session,
@@ -201,6 +208,7 @@ async def broadcast_room(room: Room) -> None:
             room.teams,
             bots_in_game_ids,
             lobby_id == room.host_id,
+            player_names_by_game_id,
         )
     )
 
