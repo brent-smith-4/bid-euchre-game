@@ -38,7 +38,9 @@ export function Landing({ onRoomReady }: LandingProps) {
           &spades; &hearts; &diams; &clubs;
         </span>
         <h1 className="landing-title">Bid Euchre</h1>
-        <p className="landing-tagline">A real-time, server-authoritative table for four.</p>
+        <p className="landing-tagline">
+          Bid and take tricks to win in this 4-player, team-based 24-card game.
+        </p>
       </div>
 
       <div className="landing-table">
