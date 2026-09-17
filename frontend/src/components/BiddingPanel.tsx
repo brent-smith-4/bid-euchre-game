@@ -1,21 +1,35 @@
 import { BID_LADDER, bidDescription, bidLabel } from "../protocol";
 import type { BidRung } from "../protocol";
 
-const POINT_VALUE: Partial<Record<BidRung, string>> = { MOON: "12 pts", ALONE: "24 pts" };
-
 interface BiddingPanelProps {
   yourTurn: boolean;
   legalBids: BidRung[];
   onBid: (rung: BidRung) => void;
+  // Defaults match a Normal-length game (see room.GAME_LENGTHS) - GameRoom
+  // always passes the server's actual state.moon_points/alone_points, since
+  // the current match's game length decides these, not this component.
+  moonPoints?: number;
+  alonePoints?: number;
 }
 
 // Buttons map straight to the server-provided legal_bids (GameSession.legal_bids,
 // which reuses is_legal_bid) rather than reimplementing the bid ladder here -
 // per the bidding-ui-and-timeouts decision. No timers: deferred by design.
-export function BiddingPanel({ yourTurn, legalBids, onBid }: BiddingPanelProps) {
+export function BiddingPanel({
+  yourTurn,
+  legalBids,
+  onBid,
+  moonPoints = 12,
+  alonePoints = 24,
+}: BiddingPanelProps) {
   if (!yourTurn) {
     return <div className="bidding-panel waiting">Waiting for the other bidders...</div>;
   }
+
+  const pointValue: Partial<Record<BidRung, string>> = {
+    MOON: `${moonPoints} pts`,
+    ALONE: `${alonePoints} pts`,
+  };
 
   return (
     <div className="bidding-panel">
@@ -30,7 +44,7 @@ export function BiddingPanel({ yourTurn, legalBids, onBid }: BiddingPanelProps) 
             title={bidDescription(rung)}
           >
             {bidLabel(rung)}
-            {POINT_VALUE[rung] && <span className="bid-points">{POINT_VALUE[rung]}</span>}
+            {pointValue[rung] && <span className="bid-points">{pointValue[rung]}</span>}
           </button>
         ))}
       </div>

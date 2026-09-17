@@ -24,6 +24,8 @@ function makeState(overrides: Partial<StateView>): StateView {
     current_trick: [],
     scores: {},
     target_score: 52,
+    moon_points: 12,
+    alone_points: 24,
     bidder_turn: null,
     player_turn: null,
     moon_swap_turn: null,

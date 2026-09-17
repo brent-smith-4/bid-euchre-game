@@ -137,14 +137,18 @@ def test_set_player_name_trims_caps_length_and_clears_on_blank() -> None:
     assert player not in room.player_names
 
 
-def test_only_host_may_set_target_score_and_start_game() -> None:
+def test_only_host_may_set_game_length_and_start_game() -> None:
     room, ids = _join_full_room()
     non_host = next(p for p in ids if p != room.host_id)
 
     with pytest.raises(ValueError):
-        room.set_target_score(non_host, 100)
-    room.set_target_score(room.host_id, 100)
-    assert room.target_score == 100
+        room.set_game_length(non_host, "quick")
+    room.set_game_length(room.host_id, "quick")
+    assert room.game_length_mode == "quick"
+    assert room.target_score == 24
+
+    with pytest.raises(ValueError):
+        room.set_game_length(room.host_id, "not-a-real-mode")
 
     with pytest.raises(ValueError):
         room.start_game(non_host)
@@ -187,7 +191,7 @@ def test_lobby_actions_rejected_once_game_has_started() -> None:
     with pytest.raises(ValueError):
         room.swap_team(ids[0], ids[1])
     with pytest.raises(ValueError):
-        room.set_target_score(room.host_id, 10)
+        room.set_game_length(room.host_id, "quick")
     with pytest.raises(ValueError):
         room.start_game(room.host_id)
 
@@ -241,6 +245,27 @@ def test_restart_game_requires_the_match_to_be_over() -> None:
 
     with pytest.raises(ValueError):
         room.restart_game(room.host_id)
+
+
+def test_finish_game_is_host_only_and_returns_to_lobby_mid_match() -> None:
+    room, ids = _join_full_room()
+    room.start_game(room.host_id)
+    non_host = next(p for p in ids if p != room.host_id)
+    old_player_team = dict(room.player_team)
+
+    with pytest.raises(ValueError):
+        room.finish_game(non_host)
+
+    room.finish_game(room.host_id)
+
+    assert room.status is RoomStatus.LOBBY
+    assert room.session is None
+    assert room.lobby_to_game == {}
+    assert room.game_to_lobby == {}
+    assert room.player_team == old_player_team  # teams survive the trip back
+
+    with pytest.raises(ValueError):
+        room.finish_game(room.host_id)  # not in a game anymore
 
 
 def test_restart_game_is_host_only_and_resets_scores_but_keeps_seats() -> None:

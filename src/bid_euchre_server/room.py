@@ -19,6 +19,26 @@ from bid_euchre.models import NUM_PLAYERS
 from bid_euchre_server.connection_manager import ConnectionManager, GameFullError
 from bid_euchre_server.session import GameSession, Phase
 
+
+@dataclass(frozen=True)
+class GameLength:
+    label: str
+    target_score: int
+    moon_points: int
+    alone_points: int
+
+
+# Selectable from the lobby's "Game Length" bullets (Lobby.tsx) - the host
+# picks one of these keys, and it fixes both how many points win the match
+# and what moon/alone are worth for its whole duration.
+GAME_LENGTHS: dict[str, GameLength] = {
+    "normal": GameLength(label="Normal", target_score=52, moon_points=12, alone_points=24),
+    "quick": GameLength(label="Quick (1/2)", target_score=24, moon_points=7, alone_points=12),
+    # Dev-only - comment out before deploying.
+    "test": GameLength(label="Test (6 to win)", target_score=6, moon_points=6, alone_points=6),
+}
+DEFAULT_GAME_LENGTH = "normal"
+
 _CODE_CHARSET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # excludes 0/O, 1/I/L - unambiguous by eye
 _CODE_LENGTH = 6
 
@@ -69,7 +89,7 @@ class Room:
         # game id they end up assigned to. Absent entries fall back to the
         # cosmetic Alpha/Bravo/Charlie/Delta labels (see protocol.ts).
         self.player_names: dict[int, str] = {}
-        self.target_score = 52
+        self.game_length_mode = DEFAULT_GAME_LENGTH
         self.session: GameSession | None = None
         # Fixed once start_game() runs: lobby seat (connection order) -> the
         # GameSession player_id that seat actually plays as, and its reverse
@@ -88,6 +108,14 @@ class Room:
     def host_id(self) -> int | None:
         connected = self.connections.connected_player_ids()
         return min(connected) if connected else None
+
+    @property
+    def game_length(self) -> GameLength:
+        return GAME_LENGTHS[self.game_length_mode]
+
+    @property
+    def target_score(self) -> int:
+        return self.game_length.target_score
 
     def naming_rights_holder(self, team: int) -> int | None:
         members = [p for p, t in self.player_team.items() if t == team and p not in self.bot_ids]
@@ -181,13 +209,13 @@ class Room:
         else:
             self.player_names.pop(player_id, None)
 
-    def set_target_score(self, player_id: int, value: int) -> None:
+    def set_game_length(self, player_id: int, mode: str) -> None:
         self._require_lobby()
         if player_id != self.host_id:
-            raise ValueError("only the host may set the target score")
-        if value <= 0:
-            raise ValueError("target score must be positive")
-        self.target_score = value
+            raise ValueError("only the host may set the game length")
+        if mode not in GAME_LENGTHS:
+            raise ValueError("invalid game length")
+        self.game_length_mode = mode
 
     def start_game(self, player_id: int) -> None:
         self._require_lobby()
@@ -208,7 +236,12 @@ class Room:
             team_b[1]: 3,
         }
         self.game_to_lobby = {game_id: lobby_id for lobby_id, game_id in self.lobby_to_game.items()}
-        self.session = GameSession(target_score=self.target_score, first_dealer_id=0)
+        self.session = GameSession(
+            target_score=self.game_length.target_score,
+            moon_points=self.game_length.moon_points,
+            alone_points=self.game_length.alone_points,
+            first_dealer_id=0,
+        )
         self.status = RoomStatus.IN_GAME
 
     def restart_game(self, player_id: int) -> None:
@@ -224,7 +257,28 @@ class Room:
         if player_id != self.host_id:
             raise ValueError("only the host may restart the game")
 
-        self.session = GameSession(target_score=self.target_score, first_dealer_id=0)
+        self.session = GameSession(
+            target_score=self.game_length.target_score,
+            moon_points=self.game_length.moon_points,
+            alone_points=self.game_length.alone_points,
+            first_dealer_id=0,
+        )
+
+    def finish_game(self, player_id: int) -> None:
+        """End the current match early (at any point, not just GAME_OVER) and
+        send everyone back to this same room's lobby - same seats, teams,
+        colors, bots, and previously-picked game length, just no session and
+        no scores.
+        """
+        if self.status is not RoomStatus.IN_GAME:
+            raise ValueError("not in a game")
+        if player_id != self.host_id:
+            raise ValueError("only the host may finish the game")
+
+        self.session = None
+        self.lobby_to_game = {}
+        self.game_to_lobby = {}
+        self.status = RoomStatus.LOBBY
 
 
 class RoomRegistry:

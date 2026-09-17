@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { BiddingPanel } from "./BiddingPanel";
 import { GameOverScreen } from "./GameOverScreen";
 import { Hand } from "./Hand";
@@ -33,13 +33,21 @@ export function GameRoom({ roomCode, onGoHome }: GameRoomProps) {
     sendSetTeamColor,
     sendSetTeamName,
     sendSetPlayerName,
-    sendSetTargetScore,
+    sendSetGameLength,
     sendStartGame,
     sendAddBot,
     sendRemoveBot,
     sendRestartGame,
+    sendFinishGame,
     dismissError,
   } = useGameSocket(roomCode);
+  // Bot turns can take a few seconds to resolve server-side (see
+  // resolve_bot_turns's "thinking" delays), during which a click here would
+  // otherwise look like it did nothing - tracking the click locally lets the
+  // button show that immediately instead of inviting a second click, which
+  // used to queue up behind the bot cascade and surface a confusing error
+  // once the room had already gone back to the lobby.
+  const [finishRequested, setFinishRequested] = useState(false);
   const roundBanner = useRoundBanner(state);
   const displayedTrick = useTrickDisplay(state);
   const bannerWinnerId = roundBanner.winnerId;
@@ -93,7 +101,7 @@ export function GameRoom({ roomCode, onGoHome }: GameRoomProps) {
         onSetTeamColor={sendSetTeamColor}
         onSetTeamName={sendSetTeamName}
         onSetPlayerName={sendSetPlayerName}
-        onSetTargetScore={sendSetTargetScore}
+        onSetGameLength={sendSetGameLength}
         onStartGame={sendStartGame}
         onAddBot={sendAddBot}
         onRemoveBot={sendRemoveBot}
@@ -129,8 +137,23 @@ export function GameRoom({ roomCode, onGoHome }: GameRoomProps) {
 
   return (
     <div className="app">
-      <div className="you-are">
-        Playing as <strong>{playerName(yourPlayerId, state?.player_names)}</strong>
+      <div className="game-header">
+        <div className="you-are">
+          Playing as <strong>{playerName(yourPlayerId, state?.player_names)}</strong>
+        </div>
+        {state.is_host && state.phase !== "GAME_OVER" && (
+          <button
+            type="button"
+            className="felt-button finish-game-button"
+            disabled={finishRequested}
+            onClick={() => {
+              setFinishRequested(true);
+              sendFinishGame();
+            }}
+          >
+            {finishRequested ? "Finishing..." : "Finish game"}
+          </button>
+        )}
       </div>
 
       <ScoreBoard
@@ -168,7 +191,13 @@ export function GameRoom({ roomCode, onGoHome }: GameRoomProps) {
           </div>
 
           {state.phase === "BIDDING" && (
-            <BiddingPanel yourTurn={isYourBidTurn} legalBids={state.legal_bids} onBid={sendBid} />
+            <BiddingPanel
+              yourTurn={isYourBidTurn}
+              legalBids={state.legal_bids}
+              onBid={sendBid}
+              moonPoints={state.moon_points}
+              alonePoints={state.alone_points}
+            />
           )}
           {state.phase === "CALLING_TRUMP" && (
             <TrumpCallPanel

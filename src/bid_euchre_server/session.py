@@ -30,7 +30,7 @@ from bid_euchre.models import (
     team_of,
 )
 from bid_euchre.ranking import effective_suit
-from bid_euchre.scoring import apply_hand_score, score_hand
+from bid_euchre.scoring import ALONE_POINTS, MOON_POINTS, apply_hand_score, score_hand
 from bid_euchre.trick import determine_trick_winner, trick_play_order, validate_play
 from bid_euchre.trick import legal_plays as compute_legal_plays
 
@@ -44,8 +44,16 @@ class Phase(Enum):
 
 
 class GameSession:
-    def __init__(self, target_score: int = 52, first_dealer_id: int = 0) -> None:
+    def __init__(
+        self,
+        target_score: int = 52,
+        moon_points: int = MOON_POINTS,
+        alone_points: int = ALONE_POINTS,
+        first_dealer_id: int = 0,
+    ) -> None:
         self.target_score = target_score
+        self.moon_points = moon_points
+        self.alone_points = alone_points
         self.phase = Phase.BIDDING
         self.state: HandState = deal_new_hand(first_dealer_id)
         self._bid_order = bid_order(self.state.dealer_id)
@@ -293,7 +301,12 @@ class GameSession:
 
     def _finish_hand(self) -> None:
         assert self.state.winning_bid is not None
-        deltas = score_hand(self.state.winning_bid, self._tricks_won)
+        deltas = score_hand(
+            self.state.winning_bid,
+            self._tricks_won,
+            moon_points=self.moon_points,
+            alone_points=self.alone_points,
+        )
         apply_hand_score(self.state.scores, deltas)
 
         if any(score >= self.target_score for score in self.state.scores.values()):

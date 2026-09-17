@@ -12,6 +12,19 @@ export type BidRung = (typeof BID_LADDER)[number];
 
 export type TrumpMode = "SUIT" | "HIGH" | "LOW";
 
+export type GameLengthMode = "normal" | "quick" | "test";
+
+// The game-length bullets offered in the lobby (see Lobby.tsx) - must match
+// GAME_LENGTHS in bid_euchre_server/room.py, which is the actual source of
+// the resulting target score and moon/alone point values (sent down on
+// every lobby_state/state message rather than recomputed here).
+export const GAME_LENGTH_OPTIONS: { value: GameLengthMode; label: string }[] = [
+  { value: "normal", label: "Normal" },
+  { value: "quick", label: "Quick (1/2)" },
+  // Dev-only - comment out before deploying.
+  { value: "test", label: "Test (6 to win)" },
+];
+
 export interface Card {
   suit: Suit;
   rank: Rank;
@@ -61,6 +74,8 @@ export interface StateView {
   current_trick: TrickPlay[];
   scores: Record<number, number>;
   target_score: number;
+  moon_points: number;
+  alone_points: number;
   bidder_turn: number | null;
   player_turn: number | null;
   moon_swap_turn: number | null;
@@ -79,7 +94,10 @@ export interface LobbyState {
   room_code: string;
   your_player_id: number;
   host_id: number | null;
+  game_length: GameLengthMode;
   target_score: number;
+  moon_points: number;
+  alone_points: number;
   players: Record<number, number>; // player_id -> team (0/1)
   player_names: Record<number, string>;
   teams: Record<number, LobbyTeamMeta>;
@@ -107,11 +125,12 @@ export type ClientMessage =
   | { type: "set_team_color"; team: number; color: string }
   | { type: "set_team_name"; team: number; name: string }
   | { type: "set_player_name"; name: string }
-  | { type: "set_target_score"; value: number }
+  | { type: "set_game_length"; mode: GameLengthMode }
   | { type: "start_game" }
   | { type: "add_bot" }
   | { type: "remove_bot"; bot_id: number }
-  | { type: "restart_game" };
+  | { type: "restart_game" }
+  | { type: "finish_game" };
 
 // -- display helpers ---------------------------------------------------
 
@@ -151,6 +170,10 @@ const PLAYER_NAME = ["Alpha", "Bravo", "Charlie", "Delta"];
 
 export function playerName(playerId: number, names?: Record<number, string>): string {
   return names?.[playerId] || PLAYER_NAME[playerId] || `Player ${playerId}`;
+}
+
+export function gameLengthLabel(mode: GameLengthMode): string {
+  return GAME_LENGTH_OPTIONS.find((option) => option.value === mode)?.label ?? mode;
 }
 
 // The only colors a team may pick - bright variants of the 3 primary + 3

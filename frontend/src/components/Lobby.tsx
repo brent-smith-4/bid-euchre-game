@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { LobbyState } from "../protocol";
-import { TEAM_COLOR_OPTIONS, playerName } from "../protocol";
+import type { GameLengthMode, LobbyState } from "../protocol";
+import { GAME_LENGTH_OPTIONS, TEAM_COLOR_OPTIONS, gameLengthLabel, playerName } from "../protocol";
 
 interface LobbyProps {
   lobbyState: LobbyState;
@@ -9,7 +9,7 @@ interface LobbyProps {
   onSetTeamColor: (team: number, color: string) => void;
   onSetTeamName: (team: number, name: string) => void;
   onSetPlayerName: (name: string) => void;
-  onSetTargetScore: (value: number) => void;
+  onSetGameLength: (mode: GameLengthMode) => void;
   onStartGame: () => void;
   onAddBot: () => void;
   onRemoveBot: (botId: number) => void;
@@ -25,7 +25,7 @@ export function Lobby({
   onSetTeamColor,
   onSetTeamName,
   onSetPlayerName,
-  onSetTargetScore,
+  onSetGameLength,
   onStartGame,
   onAddBot,
   onRemoveBot,
@@ -84,39 +84,50 @@ export function Lobby({
         <div className="lobby-host-controls">
           {isHost ? (
             <>
-              <label>
-                Target score:{" "}
-                <input
-                  type="number"
-                  min={1}
-                  defaultValue={lobbyState.target_score}
-                  onBlur={(e) => {
-                    const value = Number(e.target.value);
-                    if (value > 0) onSetTargetScore(value);
-                  }}
-                />
-              </label>
-              <button type="button" className="felt-button" disabled={seatedCount >= 4} onClick={onAddBot}>
-                Add bot
-              </button>
-              <button type="button" className="felt-button" disabled={!canStart} onClick={onStartGame}>
-                Start game
-              </button>
+              <div className="game-length-select">
+                <span className="game-length-label">Game Length:</span>
+                <div className="game-length-options">
+                  {GAME_LENGTH_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className="game-length-option"
+                      aria-pressed={lobbyState.game_length === option.value}
+                      onClick={() => onSetGameLength(option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="lobby-actions">
+                <button type="button" className="felt-button" disabled={seatedCount >= 4} onClick={onAddBot}>
+                  Add bot
+                </button>
+                <button type="button" className="felt-button" disabled={!canStart} onClick={onStartGame}>
+                  Start game
+                </button>
+                <button type="button" className="felt-button" onClick={onLeaveRoom}>
+                  Leave room
+                </button>
+              </div>
               {!canStart && (
-                <p className="lobby-hint">
-                  Need 2 players on each team to start (4 total) - currently {teamCounts[0]} on Team A,{" "}
-                  {teamCounts[1]} on Team B.
-                </p>
+                <p className="lobby-hint">Need 4 players to start (have {seatedCount}).</p>
               )}
             </>
           ) : (
-            <p className="lobby-hint">
-              Target score: {lobbyState.target_score}. Waiting for the host to start the game...
-            </p>
+            <>
+              <p className="lobby-hint">
+                Game Length: {gameLengthLabel(lobbyState.game_length)} (first to {lobbyState.target_score}).
+                Waiting for the host to start the game...
+              </p>
+              <div className="lobby-actions">
+                <button type="button" className="felt-button" onClick={onLeaveRoom}>
+                  Leave room
+                </button>
+              </div>
+            </>
           )}
-          <button type="button" className="felt-button" onClick={onLeaveRoom}>
-            Leave room
-          </button>
         </div>
       </div>
     </div>
@@ -150,6 +161,9 @@ function TeamPanel({
   const members = Object.entries(lobbyState.players)
     .filter(([, t]) => t === teamId)
     .map(([id]) => Number(id));
+  // Padded to 2 seats (a full team) so the panel is always the size it'll
+  // be once the room fills up, rather than growing as players/bots join.
+  const openSeats = Math.max(0, 2 - members.length);
   const youAreOnThisTeam = yourTeam === teamId;
   const canRenameThisTeam = yourPlayerId === team.naming_rights_holder;
   const [draftName, setDraftName] = useState(team.name ?? "");
@@ -157,13 +171,21 @@ function TeamPanel({
   return (
     <div className="team-panel" style={{ borderColor: team.color }}>
       <select
+        className="team-color-select"
+        aria-label="Team color"
         value={team.color}
         disabled={!youAreOnThisTeam}
         onChange={(e) => onSetTeamColor(teamId, e.target.value)}
+        style={{ backgroundColor: team.color }}
       >
         {TEAM_COLOR_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
+          <option
+            key={option.value}
+            value={option.value}
+            aria-label={option.label}
+            style={{ backgroundColor: option.value }}
+          >
+            {" "}
           </option>
         ))}
       </select>
@@ -197,6 +219,11 @@ function TeamPanel({
             </li>
           );
         })}
+        {Array.from({ length: openSeats }, (_, i) => (
+          <li key={`open-${i}`} className="team-panel-open-seat">
+            Open seat
+          </li>
+        ))}
       </ul>
     </div>
   );

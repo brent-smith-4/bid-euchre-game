@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { WS_BASE } from "./config";
-import type { BidRung, Card, ClientMessage, LobbyState, ServerMessage, StateView, Suit, TrumpMode } from "./protocol";
+import type {
+  BidRung,
+  Card,
+  ClientMessage,
+  GameLengthMode,
+  LobbyState,
+  ServerMessage,
+  StateView,
+  Suit,
+  TrumpMode,
+} from "./protocol";
 import { describeError } from "./protocol";
 
 export type ConnectionStatus = "connecting" | "open" | "closed" | "full" | "not_found";
@@ -21,11 +31,12 @@ export interface GameSocket {
   sendSetTeamColor: (team: number, color: string) => void;
   sendSetTeamName: (team: number, name: string) => void;
   sendSetPlayerName: (name: string) => void;
-  sendSetTargetScore: (value: number) => void;
+  sendSetGameLength: (mode: GameLengthMode) => void;
   sendStartGame: () => void;
   sendAddBot: () => void;
   sendRemoveBot: (botId: number) => void;
   sendRestartGame: () => void;
+  sendFinishGame: () => void;
   dismissError: () => void;
 }
 
@@ -64,6 +75,12 @@ export function useGameSocket(roomCode: string | null): GameSocket {
       } else if (message.type === "lobby_state") {
         setYourPlayerId(message.your_player_id);
         setLobbyState(message);
+        // A lobby_state only ever arrives while room.status is LOBBY (see
+        // build_lobby_view) - including right after finish_game sends an
+        // in-progress match's room back here, so any leftover game `state`
+        // from that match must be cleared or GameRoom's `state === null`
+        // check would keep rendering the old game screen instead of Lobby.
+        setState(null);
       } else if (message.type === "state") {
         setYourPlayerId(message.your_player_id);
         setState(message);
@@ -109,14 +126,15 @@ export function useGameSocket(roomCode: string | null): GameSocket {
     [send],
   );
   const sendSetPlayerName = useCallback((name: string) => send({ type: "set_player_name", name }), [send]);
-  const sendSetTargetScore = useCallback(
-    (value: number) => send({ type: "set_target_score", value }),
+  const sendSetGameLength = useCallback(
+    (mode: GameLengthMode) => send({ type: "set_game_length", mode }),
     [send],
   );
   const sendStartGame = useCallback(() => send({ type: "start_game" }), [send]);
   const sendAddBot = useCallback(() => send({ type: "add_bot" }), [send]);
   const sendRemoveBot = useCallback((botId: number) => send({ type: "remove_bot", bot_id: botId }), [send]);
   const sendRestartGame = useCallback(() => send({ type: "restart_game" }), [send]);
+  const sendFinishGame = useCallback(() => send({ type: "finish_game" }), [send]);
   const dismissError = useCallback(() => setError(null), []);
 
   return {
@@ -133,11 +151,12 @@ export function useGameSocket(roomCode: string | null): GameSocket {
     sendSetTeamColor,
     sendSetTeamName,
     sendSetPlayerName,
-    sendSetTargetScore,
+    sendSetGameLength,
     sendStartGame,
     sendAddBot,
     sendRemoveBot,
     sendRestartGame,
+    sendFinishGame,
     dismissError,
   };
 }

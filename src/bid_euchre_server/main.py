@@ -39,6 +39,15 @@ app.add_middleware(
 registry = RoomRegistry()
 room_creation_limiter = RateLimiter(max_calls=5, window_seconds=60)
 
+# One resolve_bot_turns cascade per room, tracked by room code so a second
+# trigger while one's already in flight doesn't spawn a duplicate - the
+# in-flight loop already keeps checking for further consecutive bot turns
+# itself. Scheduling this instead of awaiting it inline (see
+# schedule_bot_turns) is what lets a connection immediately read its next
+# incoming message - e.g. finish_game - instead of being stuck behind
+# however many bot "thinking" delays are queued up.
+bot_tasks: dict[str, asyncio.Task[None]] = {}
+
 # Artificial "thinking" delays so bot turns don't just flash by instantly.
 # Module-level (not constants) so tests can zero them out for speed - see
 # test_main.py's reset_registry fixture. Bids escalate per consecutive bot
@@ -93,8 +102,8 @@ def handle_lobby_message(room: Room, player_id: int, message: dict[str, Any]) ->
         room.set_team_name(player_id, message["team"], message["name"])
     elif msg_type == "set_player_name":
         room.set_player_name(player_id, message["name"])
-    elif msg_type == "set_target_score":
-        room.set_target_score(player_id, message["value"])
+    elif msg_type == "set_game_length":
+        room.set_game_length(player_id, message["mode"])
     elif msg_type == "start_game":
         room.start_game(player_id)
     elif msg_type == "add_bot":
@@ -184,8 +193,29 @@ async def resolve_bot_turns(room: Room) -> None:
             delay = random.uniform(*ACTION_DELAY_RANGE)
         await asyncio.sleep(delay)
 
+        # The host may have called finish_game/restart_game on a different
+        # connection while this bot was "thinking," swapping room.session
+        # out from under this loop - if so, `session` is now an orphaned
+        # match that no longer has any business acting or broadcasting.
+        if room.session is not session:
+            return
+
         _take_bot_action(session, game_id)
         await broadcast_room(room)
+
+
+def schedule_bot_turns(room: Room) -> None:
+    """Kick off resolve_bot_turns in the background rather than awaiting it
+    inline, so whichever connection triggered it can go straight back to
+    listening for its own next message instead of blocking on bot
+    "thinking" delays. A no-op if a cascade for this room is already
+    running - that loop will pick up any further consecutive bot turns on
+    its own.
+    """
+    existing = bot_tasks.get(room.code)
+    if existing is not None and not existing.done():
+        return
+    bot_tasks[room.code] = asyncio.create_task(resolve_bot_turns(room))
 
 
 async def broadcast_room(room: Room) -> None:
@@ -243,10 +273,22 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str) -> None:
         while True:
             message = await websocket.receive_json()
             try:
-                if room.status is RoomStatus.LOBBY:
-                    handle_lobby_message(room, player_id, message)
-                elif message.get("type") == "restart_game":
+                # restart_game/finish_game are recognized regardless of
+                # room.status - they validate their own preconditions (see
+                # Room.restart_game/finish_game) and raise a clear "not in a
+                # game" ValueError if inapplicable. Checking room.status
+                # first would instead route a stray finish_game that arrives
+                # just after the room has already flipped back to LOBBY (a
+                # duplicate click queued behind a bot "thinking" delay, say)
+                # into handle_lobby_message, which doesn't recognize either
+                # message type and raises a much more confusing "unknown
+                # message type" error.
+                if message.get("type") == "restart_game":
                     room.restart_game(player_id)
+                elif message.get("type") == "finish_game":
+                    room.finish_game(player_id)
+                elif room.status is RoomStatus.LOBBY:
+                    handle_lobby_message(room, player_id, message)
                 else:
                     session = room.session
                     assert session is not None
@@ -255,7 +297,7 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str) -> None:
                 await websocket.send_json({"type": "error", "message": str(exc)})
                 continue
             await broadcast_room(room)  # the human's own action, shown immediately
-            await resolve_bot_turns(room)  # bots then trickle in with their own delays
+            schedule_bot_turns(room)  # bots then trickle in on their own, without blocking this connection
     except WebSocketDisconnect:
         room.connections.disconnect(player_id)
         if room.status is RoomStatus.LOBBY:

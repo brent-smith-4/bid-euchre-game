@@ -191,6 +191,69 @@ def test_only_host_may_start_game_and_it_transitions_to_in_game() -> None:
         assert states[0]["phase"] == "BIDDING"
 
 
+def test_finish_game_over_websocket_returns_everyone_to_lobby() -> None:
+    client = TestClient(main_module.app)
+    code = _create_room(client)
+    with (
+        client.websocket_connect(f"/ws/{code}") as ws0,
+        client.websocket_connect(f"/ws/{code}") as ws1,
+        client.websocket_connect(f"/ws/{code}") as ws2,
+        client.websocket_connect(f"/ws/{code}") as ws3,
+    ):
+        sockets = [ws0, ws1, ws2, ws3]
+        _join_and_start_game(client, code, sockets)
+
+        ws0.send_json({"type": "finish_game"})
+        backs = _drain_all(sockets, 1)
+        assert all(b["type"] == "lobby_state" for b in backs)
+
+
+def test_finish_game_is_not_queued_behind_a_bot_thinking_cascade() -> None:
+    """Regression: resolve_bot_turns used to be awaited inline in the same
+    connection's message loop, so a bot "thinking" delay blocked that
+    connection from reading its next incoming message at all - a host
+    clicking Finish Game during a bot's turn had to wait out the entire
+    cascade before the server even looked at it. resolve_bot_turns now runs
+    as a background task (see schedule_bot_turns) so finish_game is
+    processed immediately regardless of what bots are doing.
+    """
+    client = TestClient(main_module.app)
+    code = _create_room(client)
+    # A real, deliberately long "thinking" delay for this test only - long
+    # enough that finish_game arriving after it would be unmistakable.
+    main_module.BID_DELAY_RANGE = (2.0, 2.0)
+    main_module.BID_DELAY_INCREMENT = 0.0
+
+    with client.websocket_connect(f"/ws/{code}") as ws:
+        _drain(ws, 1 + 1)  # assigned_seat + initial lobby_state
+        for _ in range(3):
+            ws.send_json({"type": "add_bot"})
+            ws.receive_json()
+
+        ws.send_json({"type": "start_game"})
+        ws.receive_json()  # the human's own start_game broadcast
+
+        ws.send_json({"type": "finish_game"})
+        # If finish_game were still stuck behind the 2s-per-bot bid cascade,
+        # this would time out waiting on a bot's "state" broadcast instead.
+        response = ws.receive_json()
+        assert response["type"] == "lobby_state"
+
+
+def test_finish_game_before_a_game_starts_is_a_clear_error_not_unknown_type() -> None:
+    # Regression: finish_game/restart_game used to only be checked once
+    # room.status was already confirmed IN_GAME, so a finish_game that
+    # arrived while the room was (no longer, or not yet) in a game fell
+    # through to handle_lobby_message and came back as a confusing "unknown
+    # message type" error instead of Room.finish_game's own "not in a game".
+    client = TestClient(main_module.app)
+    code = _create_room(client)
+    with client.websocket_connect(f"/ws/{code}") as ws:
+        _drain(ws, 1 + 1)  # assigned_seat + initial lobby_state
+        ws.send_json({"type": "finish_game"})
+        assert ws.receive_json() == {"type": "error", "message": "not in a game"}
+
+
 def test_bidding_and_trump_call_broadcast_over_websockets() -> None:
     client = TestClient(main_module.app)
     code = _create_room(client)
