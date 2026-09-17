@@ -33,7 +33,9 @@ export function BiddingPanel({
 
   return (
     <div className="bidding-panel">
-      <p>Your bid: bid the number of tricks (3-6) you and your partner will take, or go bigger.</p>
+      <p>
+        <strong>Your Bid:</strong> # of tricks you think your team can take
+      </p>
       <div className="bid-buttons">
         {BID_LADDER.map((rung) => (
           <button
@@ -49,8 +51,9 @@ export function BiddingPanel({
         ))}
       </div>
       <p className="bid-legend">
-        <strong>Shoot the Moon</strong>: all 6 tricks, partner card swap. <strong>Go Alone</strong>: all 6
-        tricks solo, partner sits out.
+        <strong>Shoot the Moon</strong>: 6 tricks solo, partner card swap
+        <br />
+        <strong>Go Alone</strong>: 6 tricks solo
       </p>
     </div>
   );

@@ -412,20 +412,29 @@
   font-size: 0.95rem;
 }
 
+.trump-suit-red {
+  color: #c02020;
+}
+
 /* -- table ------------------------------------------------------------ */
 
 .table {
   width: 100%;
-  min-height: 260px;
-  background: var(--felt);
-  border: 6px solid var(--felt-dark);
-  border-radius: 16px;
+  min-height: clamp(340px, 58vh, 560px);
+  background: radial-gradient(ellipse at center, var(--felt) 0%, var(--felt-dark) 120%);
+  border: 10px solid var(--felt-dark);
+  border-radius: 260px / 70px;
+  box-shadow:
+    0 0 0 4px var(--table-rail),
+    inset 0 0 40px rgba(0, 0, 0, 0.35),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.08),
+    0 16px 40px rgba(0, 0, 0, 0.35);
   display: grid;
   grid-template-columns: 1fr 2fr 1fr;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto 1fr auto;
   align-items: center;
   justify-items: center;
-  padding: 1rem;
+  padding: 1.75rem 1rem;
   gap: 0.5rem;
   position: relative;
 }
@@ -457,11 +466,16 @@
   grid-row: 2;
 }
 
+.seat-bottom {
+  grid-column: 2;
+  grid-row: 3;
+}
+
 .seat-label {
   font-weight: 600;
 }
 
-.bot-marker {
+.seat-tag {
   margin-left: 0.4em;
   font-size: 0.7em;
   font-weight: 400;
@@ -487,6 +501,77 @@
   opacity: 0.85;
 }
 
+.seat-cards {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.3rem;
+}
+
+.seat-cards > * {
+  margin-left: -12px;
+}
+
+.seat-cards > *:first-child {
+  margin-left: 0;
+}
+
+.deal-overlay {
+  grid-column: 2;
+  grid-row: 2;
+  position: relative;
+  width: 140px;
+  height: 140px;
+  pointer-events: none;
+}
+
+.deal-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin: -16.5px 0 0 -12px;
+  opacity: 0;
+  animation: deal-card 0.45s ease-out forwards;
+  animation-delay: var(--fly-delay, 0ms);
+}
+
+@keyframes deal-card {
+  0% {
+    transform: translate(0, 0) scale(0.7);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--fly-x, 0), var(--fly-y, 0)) scale(0.85);
+    opacity: 0;
+  }
+}
+
+/* Shared "which direction is this seat" offsets - used both by the deal
+   animation's flying card-backs and by the trick-sweep flip below, so a
+   card visually travels toward whichever seat (deal target / trick winner)
+   is relevant in each case. */
+.fly-to-top {
+  --fly-x: 0px;
+  --fly-y: -190px;
+}
+
+.fly-to-bottom {
+  --fly-x: 0px;
+  --fly-y: 190px;
+}
+
+.fly-to-left {
+  --fly-x: -230px;
+  --fly-y: 0px;
+}
+
+.fly-to-right {
+  --fly-x: 230px;
+  --fly-y: 0px;
+}
+
 .trick-area {
   grid-column: 2;
   grid-row: 2;
@@ -500,6 +585,7 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  perspective: 600px;
 }
 
 .trick-play-top {
@@ -518,6 +604,52 @@
   transform: translate(40%, -50%);
 }
 
+.trick-card-flip {
+  position: relative;
+  width: 52px;
+  height: 72px;
+  transform-style: preserve-3d;
+}
+
+.trick-card-front,
+.trick-card-back {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+}
+
+.trick-card-back {
+  transform: rotateY(180deg);
+}
+
+/* Plays once a trick has just completed (see useTrickDisplay's 2s hold) -
+   holds the card face up and in place, then flips it face down and sends
+   it flying toward the winner's seat, fading out right as the hold ends. */
+.trick-card-flip.sweeping {
+  animation: trick-sweep 0.6s ease-in forwards;
+  animation-delay: 1.4s;
+}
+
+@keyframes trick-sweep {
+  /* translate must come before rotateY here, not after - transform
+     functions compose right-to-left, so a trailing rotateY(180deg) would
+     re-apply to (and negate the X of) whatever translate precedes it,
+     mirroring left/right sweeps into their opposite direction. Listing
+     translate first keeps it anchored to the original, unrotated axes. */
+  0% {
+    transform: translate(0, 0) rotateY(0deg);
+    opacity: 1;
+  }
+  55% {
+    transform: translate(0, 0) rotateY(90deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--fly-x, 0), var(--fly-y, 0)) rotateY(180deg);
+    opacity: 0;
+  }
+}
+
 /* -- cards -------------------------------------------------------------- */
 
 .hand {
@@ -528,19 +660,17 @@
 }
 
 .playing-card {
+  position: relative;
   width: 52px;
   height: 72px;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 6px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
   font-weight: 700;
-  font-size: 1.1rem;
-  line-height: 1.1;
+  line-height: 1;
   cursor: default;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
 }
 
 button.playing-card {
@@ -569,6 +699,92 @@ button.playing-card:hover:not(:disabled) {
   border: 2px solid var(--accent);
   transform: translateY(-4px);
   box-shadow: 0 0 0 2px var(--accent-bg, #fff6e0);
+}
+
+.card-index {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.card-index-top {
+  top: 4px;
+  left: 4px;
+}
+
+.card-index-bottom {
+  bottom: 4px;
+  right: 4px;
+  transform: rotate(180deg);
+}
+
+.card-index-rank {
+  font-size: 0.85rem;
+}
+
+.card-index-suit {
+  font-size: 0.7rem;
+}
+
+.card-pip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.7rem;
+}
+
+.playing-card-mini {
+  width: 24px;
+  height: 33px;
+  border-radius: 3px;
+}
+
+.playing-card-mini .card-index-top {
+  top: 1px;
+  left: 1px;
+}
+
+.playing-card-mini .card-index-bottom {
+  bottom: 1px;
+  right: 1px;
+}
+
+.playing-card-mini .card-index-rank {
+  font-size: 0.5rem;
+}
+
+.playing-card-mini .card-index-suit {
+  font-size: 0.42rem;
+}
+
+.playing-card-mini .card-pip {
+  font-size: 0.8rem;
+}
+
+.card-back {
+  width: 52px;
+  height: 72px;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  background-color: var(--felt-dark);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--accent) 0,
+    var(--accent) 4px,
+    transparent 4px,
+    transparent 9px
+  );
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
+}
+
+.card-back-mini {
+  width: 24px;
+  height: 33px;
+  border-radius: 3px;
+  background-size: 12px 12px;
 }
 
 /* -- panels -------------------------------------------------------------- */

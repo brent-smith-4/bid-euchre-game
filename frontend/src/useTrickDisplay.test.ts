@@ -48,10 +48,11 @@ describe("useTrickDisplay", () => {
     const { result } = renderHook(({ state }) => useTrickDisplay(state), {
       initialProps: { state: makeState({ current_trick: currentTrick }) },
     });
-    expect(result.current).toBe(currentTrick);
+    expect(result.current.cards).toBe(currentTrick);
+    expect(result.current.winnerId).toBeNull();
   });
 
-  it("holds the completed trick on screen even as a new trick starts building, then hands off", () => {
+  it("holds the completed trick on screen (with its winner) even as a new trick starts building, then hands off", () => {
     const finishedTrick: TrickPlay[] = [
       { player_id: 0, card: CARD_A },
       { player_id: 1, card: CARD_B },
@@ -63,20 +64,33 @@ describe("useTrickDisplay", () => {
     // the trick completes: tricks_completed increments, last_trick is set,
     // and current_trick has already been cleared by the server.
     rerender({
-      state: makeState({ tricks_completed: 1, last_trick: finishedTrick, current_trick: [] }),
+      state: makeState({
+        tricks_completed: 1,
+        last_trick: finishedTrick,
+        last_trick_winner: 1,
+        current_trick: [],
+      }),
     });
-    expect(result.current).toBe(finishedTrick);
+    expect(result.current.cards).toBe(finishedTrick);
+    expect(result.current.winnerId).toBe(1);
 
     // the next trick starts building for real - still held, not the new card.
     const newCard: TrickPlay[] = [{ player_id: 2, card: CARD_A }];
     rerender({
-      state: makeState({ tricks_completed: 1, last_trick: finishedTrick, current_trick: newCard }),
+      state: makeState({
+        tricks_completed: 1,
+        last_trick: finishedTrick,
+        last_trick_winner: 1,
+        current_trick: newCard,
+      }),
     });
-    expect(result.current).toBe(finishedTrick);
+    expect(result.current.cards).toBe(finishedTrick);
+    expect(result.current.winnerId).toBe(1);
 
     // after the hold window, hands off to whatever current_trick is by then.
     act(() => vi.advanceTimersByTime(2000));
-    expect(result.current).toBe(newCard);
+    expect(result.current.cards).toBe(newCard);
+    expect(result.current.winnerId).toBeNull();
   });
 
   it("replaces the held trick immediately if a second trick completes before the hold expires", () => {
@@ -86,11 +100,13 @@ describe("useTrickDisplay", () => {
       initialProps: { state: makeState({ tricks_completed: 0 }) },
     });
 
-    rerender({ state: makeState({ tricks_completed: 1, last_trick: firstTrick }) });
-    expect(result.current).toBe(firstTrick);
+    rerender({ state: makeState({ tricks_completed: 1, last_trick: firstTrick, last_trick_winner: 0 }) });
+    expect(result.current.cards).toBe(firstTrick);
+    expect(result.current.winnerId).toBe(0);
 
     act(() => vi.advanceTimersByTime(500));
-    rerender({ state: makeState({ tricks_completed: 2, last_trick: secondTrick }) });
-    expect(result.current).toBe(secondTrick);
+    rerender({ state: makeState({ tricks_completed: 2, last_trick: secondTrick, last_trick_winner: 1 }) });
+    expect(result.current.cards).toBe(secondTrick);
+    expect(result.current.winnerId).toBe(1);
   });
 });

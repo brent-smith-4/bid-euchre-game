@@ -16,17 +16,38 @@ interface PlayingCardProps {
   // click a different card to change their pick, or click this one again
   // to unselect it.
   selected?: boolean;
+  // "mini" is a small, non-interactive face-up card used for the on-table
+  // seat display (see Seat.tsx) - always rendered without onClick.
+  size?: "normal" | "mini";
 }
 
-export function PlayingCard({ card, onClick, illegal, selected }: PlayingCardProps) {
+function CardFace({ card }: { card: Card }) {
+  const rank = rankLabel(card.rank);
+  const suit = suitSymbol(card.suit);
+  return (
+    <>
+      <span className="card-index card-index-top">
+        <span className="card-index-rank">{rank}</span>
+        <span className="card-index-suit">{suit}</span>
+      </span>
+      <span className="card-pip">{suit}</span>
+      <span className="card-index card-index-bottom">
+        <span className="card-index-rank">{rank}</span>
+        <span className="card-index-suit">{suit}</span>
+      </span>
+    </>
+  );
+}
+
+export function PlayingCard({ card, onClick, illegal, selected, size = "normal" }: PlayingCardProps) {
   const color = suitColor(card.suit);
   const label = `${rankLabel(card.rank)} of ${card.suit.toLowerCase()}`;
+  const sizeClass = size === "mini" ? " playing-card-mini" : "";
 
   if (!onClick) {
     return (
-      <div className={`playing-card ${color}`} aria-label={label}>
-        <span className="rank">{rankLabel(card.rank)}</span>
-        <span className="suit">{suitSymbol(card.suit)}</span>
+      <div className={`playing-card ${color}${sizeClass}`} aria-label={label}>
+        <CardFace card={card} />
       </div>
     );
   }
@@ -34,14 +55,13 @@ export function PlayingCard({ card, onClick, illegal, selected }: PlayingCardPro
   return (
     <button
       type="button"
-      className={`playing-card ${color}${illegal ? " illegal" : ""}${selected ? " selected" : ""}`}
+      className={`playing-card ${color}${sizeClass}${illegal ? " illegal" : ""}${selected ? " selected" : ""}`}
       onClick={onClick}
       disabled={illegal}
       aria-label={label}
       aria-pressed={selected}
     >
-      <span className="rank">{rankLabel(card.rank)}</span>
-      <span className="suit">{suitSymbol(card.suit)}</span>
+      <CardFace card={card} />
     </button>
   );
 }

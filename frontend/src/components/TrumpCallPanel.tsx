@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Card, Suit, TrumpMode } from "../protocol";
-import { cardKey, cardsEqual, suitSymbol } from "../protocol";
+import { cardKey, cardsEqual, suitColor, suitSymbol } from "../protocol";
 import { PlayingCard } from "./PlayingCard";
 
 interface TrumpCallPanelProps {
@@ -50,7 +50,9 @@ export function TrumpCallPanel({ isBidWinner, isMoonBid, yourHand, onCallTrump }
             }
             onClick={() => chooseTrump("SUIT", suit)}
           >
-            {suitSymbol(suit)}
+            <span className={suitColor(suit) === "red" ? "trump-suit-red" : undefined}>
+              {suitSymbol(suit)}
+            </span>
           </button>
         ))}
         <button

@@ -301,6 +301,46 @@ has zero knowledge bots exist.
   doomed IPv6 (`::1`) attempt before falling back, adding a consistent ~200ms+ delay to every
   request and WebSocket connection on Windows.
 
+## Table/card visual overhaul
+- **Real playing-card visuals** — `PlayingCard` now draws proper corner indices (rank+suit
+  stacked top-left, mirrored bottom-right) around a large centered suit pip, instead of a plain
+  centered rank/suit stack. Every card everywhere (hand, trick area, moon-swap, trump-call) picks
+  this up automatically since they all share the one component. Diamond/heart suit symbols are
+  red (`#c02020`, matching the card faces) everywhere a suit renders standalone too — the trump
+  indicator ("Trump: ♦") and the Call Trump suit buttons.
+- **Shuffle-and-deal animation** — a new `useDealAnimation` hook detects the start of a fresh hand
+  (the dealer seat rotates, no bids/tricks yet - every hand's dealer strictly increments, so this
+  is unambiguous without the server announcing it as its own event) and plays a ~2.5s overlay of
+  small flying card-backs, dealt clockwise from the seat left of the dealer, 2 at a time, until
+  all 24 are out. The ref that tracks "the last dealer we saw" is seeded with an impossible
+  sentinel (`-1`) rather than `null`, so the very first hand of a match animates too, not just the
+  second hand onward. Both the on-table seat card fans *and* the interactive hand panel below the
+  table reveal in step with the animation (via the hook's `revealedCounts`) instead of jumping to
+  the real, already-fully-dealt hand size the instant the state arrives - `useDealAnimation` is
+  called once in `GameRoom` and passed down to `Table`, rather than called separately in each, so
+  both stay in sync off the same clock.
+- **Every seat shows its cards on the table** — face-down backs sized to hand count for
+  opponents/teammate, face-up mini cards for you, in addition to (not instead of) the existing
+  interactive hand panel below the table.
+- **Trick-winner sweep animation** — once a trick completes, the 4 played cards hold face-up for
+  the first 1.4s of the existing 2s display window, then flip face-down and fly toward the
+  winner's seat while fading out, finishing right as the hold ends (no snap). Found and fixed a
+  real CSS bug here during testing: the keyframe listed `rotateY(180deg) translate(x, y)` - since
+  transform functions compose right-to-left, that made the *rotation* the outer transform, which
+  negates the X-axis translation afterward and silently mirrored every left/right sweep (a trick
+  Bravo/left won would visibly sweep toward Delta/right instead). Reordering to
+  `translate(x, y) rotateY(180deg)` keeps the translate anchored to the original, unrotated axes.
+  Top/bottom sweeps were never affected, since rotateY only flips X and Z.
+- **Table is taller and more stylized** — `min-height: clamp(340px, 58vh, 560px)` (was a flat
+  260px) so it shrinks on short viewports instead of forcing a fixed height regardless of
+  available space, oval-ish rounded corners, a brown rail (`--table-rail`, kept separate from the
+  app's gold `--accent` so only the table trim changed) instead of gold, and a radial felt
+  gradient instead of a flat color.
+- **Bid/trump status moved above the table**, directly under the scoreboard, instead of between
+  the table and the bid/trump-call panel.
+- **Bid prompt copy**: "Your Bid: # of tricks you think your team can take." Legend copy split
+  into two lines: "Shoot the Moon: 6 tricks solo, partner card swap" / "Go Alone: 6 tricks solo."
+
 ## Current test coverage
 - Backend: 148 tests (`pytest`), mypy strict clean. Includes a 500-hand fuzz test asserting
   `choose_card_to_play` never produces an illegal card, end-to-end WebSocket tests where a lone

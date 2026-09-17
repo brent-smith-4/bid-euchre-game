@@ -8,7 +8,8 @@ import { ScoreBoard } from "./ScoreBoard";
 import { Table } from "./Table";
 import { Toast } from "./Toast";
 import { TrumpCallPanel } from "./TrumpCallPanel";
-import { bidLabel, partnerOf, playerColor, playerName, suitSymbol } from "../protocol";
+import { bidLabel, partnerOf, playerColor, playerName, suitColor, suitSymbol } from "../protocol";
+import { useDealAnimation } from "../useDealAnimation";
 import { useGameSocket } from "../useGameSocket";
 import { useRoundBanner } from "../useRoundBanner";
 import { useTrickDisplay } from "../useTrickDisplay";
@@ -49,7 +50,12 @@ export function GameRoom({ roomCode, onGoHome }: GameRoomProps) {
   // once the room had already gone back to the lobby.
   const [finishRequested, setFinishRequested] = useState(false);
   const roundBanner = useRoundBanner(state);
-  const displayedTrick = useTrickDisplay(state);
+  const trickDisplay = useTrickDisplay(state);
+  // Shared with Table (which reveals each seat's on-table card fan in step
+  // with this) so the interactive hand below the table doesn't just show
+  // all 6 cards immediately while the deal animation is still "dealing"
+  // them out above it.
+  const deal = useDealAnimation(state, yourPlayerId);
   const bannerWinnerId = roundBanner.winnerId;
   const bannerEvent = roundBanner.event;
   const bannerColor =
@@ -134,6 +140,10 @@ export function GameRoom({ roomCode, onGoHome }: GameRoomProps) {
     state.phase === "MOON_SWAP" ||
     (state.phase === "CALLING_TRUMP" && isMoonBid && isBidWinner) ||
     (state.phase === "PLAYING" && isSittingOutPartner);
+  // While the deal animation is still playing, show only however many of
+  // your cards have actually "landed" so far (see Table's matching seat
+  // fan) instead of the real, already-fully-dealt hand every card at once.
+  const visibleHand = deal ? state.your_hand.slice(0, deal.revealedCounts[yourPlayerId] ?? 0) : state.your_hand;
 
   return (
     <div className="app">
@@ -163,6 +173,29 @@ export function GameRoom({ roomCode, onGoHome }: GameRoomProps) {
         teams={state.teams}
       />
 
+      {state.phase !== "GAME_OVER" && (state.trump || state.winning_bid) && (
+        <div className="trump-indicator">
+          {state.trump && (
+            <span>
+              Trump:{" "}
+              {state.trump.mode === "SUIT" ? (
+                <span className={suitColor(state.trump.suit!) === "red" ? "trump-suit-red" : undefined}>
+                  {suitSymbol(state.trump.suit!)}
+                </span>
+              ) : (
+                state.trump.mode
+              )}
+            </span>
+          )}
+          {state.winning_bid && (
+            <span>
+              Bid: {bidLabel(state.winning_bid.rung)} by{" "}
+              {playerName(state.winning_bid.player_id, state.player_names)}
+            </span>
+          )}
+        </div>
+      )}
+
       {state.phase === "GAME_OVER" ? (
         <GameOverScreen
           scores={state.scores}
@@ -174,21 +207,7 @@ export function GameRoom({ roomCode, onGoHome }: GameRoomProps) {
         />
       ) : (
         <>
-          <Table state={state} yourPlayerId={yourPlayerId} displayedTrick={displayedTrick} />
-
-          <div className="trump-indicator">
-            {state.trump && (
-              <span>
-                Trump: {state.trump.mode === "SUIT" ? suitSymbol(state.trump.suit!) : state.trump.mode}
-              </span>
-            )}
-            {state.winning_bid && (
-              <span>
-                Bid: {bidLabel(state.winning_bid.rung)} by{" "}
-                {playerName(state.winning_bid.player_id, state.player_names)}
-              </span>
-            )}
-          </div>
+          <Table state={state} yourPlayerId={yourPlayerId} trickDisplay={trickDisplay} deal={deal} />
 
           {state.phase === "BIDDING" && (
             <BiddingPanel
@@ -226,7 +245,7 @@ export function GameRoom({ roomCode, onGoHome }: GameRoomProps) {
 
           {!hideGenericHand && (
             <Hand
-              cards={state.your_hand}
+              cards={visibleHand}
               yourTurn={state.phase === "PLAYING" && isYourPlayTurn}
               legalPlays={state.legal_plays}
               onPlay={sendPlayCard}
