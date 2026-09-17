@@ -242,11 +242,71 @@ has zero knowledge bots exist.
   for the MOON/ALONE partner during `PLAYING`, instead of rendering their hand as a normal-looking
   but silently inert set of cards.
 
+## Game length presets — Normal/Quick/Test
+- **The lobby's numeric "Target score" input became a "Game Length" selector** offering three
+  presets, each fixing both the match's target score and what MOON/ALONE pay out for its whole
+  duration: Normal (52 to win, MOON 12/ALONE 24 — unchanged from before), Quick (24 to win, MOON
+  7/ALONE 12), and a dev-only Test preset (6 to win, MOON/ALONE both 6) for quickly exercising the
+  win-condition path — marked with a `# Dev-only - comment out before deploying.` comment on both
+  the backend (`room.GAME_LENGTHS`) and frontend (`protocol.GAME_LENGTH_OPTIONS`) entries, a
+  one-line removal rather than a feature flag.
+- `bid_euchre.scoring.score_hand` now takes optional `moon_points`/`alone_points` (defaulting to
+  the old module constants, so every existing call site and test is unaffected);
+  `GameSession`/`Room` thread the selected preset's values through to it. The wire protocol's
+  `lobby_state`/`state` payloads carry `game_length`/`target_score`/`moon_points`/`alone_points`,
+  and `BiddingPanel`'s bid-button point labels now read from the server's values instead of a
+  hardcoded "12 pts"/"24 pts" — keeps the client from having its own opinion about what a bid is
+  worth, per CLAUDE.md's server-authority principle.
+- The selected preset renders as a row of pill buttons rather than a dropdown/number field, with
+  the active one styled to look physically pressed in (inset shadow, slight downward shift) rather
+  than just a color change.
+
+## Host controls — Finish game
+- **The host can end an in-progress match early via a "Finish game" button**, sending everyone
+  back to that same room's lobby with teams, colors, bots, and the previously-picked game length
+  intact (`Room.finish_game`, gated to `IN_GAME` + host-only, mirroring `restart_game`'s shape).
+  Hidden once a match reaches `GAME_OVER`, since that screen already has its own "Play again"/Home
+  controls.
+- **Fixed a WS dispatch bug this surfaced**: `finish_game`/`restart_game` were only checked *after*
+  confirming `room.status is IN_GAME`, so a message that arrived just as the room had already
+  flipped back to `LOBBY` (a duplicate click queued behind a bot's "thinking" delay, say) fell
+  through to the lobby-only message handler and came back as a confusing "unknown message type"
+  instead of the intended "not in a game." Both message types are now recognized regardless of
+  room status.
+- **Fixed the deeper cause of that queuing**: `resolve_bot_turns` used to be `await`ed inline in
+  the same connection's message loop, so a bot's "thinking" `asyncio.sleep` blocked that connection
+  from reading *any* new incoming message — including Finish Game — until the entire bot cascade
+  finished. It now runs as a background task (`schedule_bot_turns`, one per room, tracked so a
+  second trigger while one's in flight is a no-op), so a host action takes effect immediately no
+  matter what bots are doing. A companion staleness guard makes an orphaned cascade quietly stop
+  (rather than acting/broadcasting on an abandoned match) if `finish_game`/`restart_game` swaps
+  `room.session` out from under it mid-sleep. `GameRoom`'s Finish Game button also disables itself
+  and shows "Finishing..." immediately on click, so there's no reason to click it twice while
+  waiting out a bot delay in the first place.
+- `useGameSocket` previously never reset its `state` back to `null` on a `lobby_state` message —
+  harmless while rooms only ever went lobby→game, but would have left the old game screen frozen
+  on screen after `finish_game` sent the room back to `LOBBY`. Fixed alongside the button.
+
+## Lobby UI polish
+- **Team panels are always sized for a full team (2 seats each)** instead of growing as
+  players/bots join — empty seats render as a dashed, italicized "Open seat" placeholder so the
+  room looks like it did with all 4 seats filled from the moment it's created.
+- **Host action buttons (Add bot / Start game / Leave room) are grouped into one row**, and the
+  "need more players" hint simplified from "Need 2 players on each team to start (4 total) -
+  currently X on Team A, Y on Team B" to "Need 4 players to start (have N)."
+
+## Dev environment fix
+- The frontend's `HTTP_BASE`/`WS_BASE` defaults changed from `localhost:8000` to `127.0.0.1:8000`.
+  uvicorn only binds the IPv4 loopback; resolving `localhost` made the browser waste time on a
+  doomed IPv6 (`::1`) attempt before falling back, adding a consistent ~200ms+ delay to every
+  request and WebSocket connection on Windows.
+
 ## Current test coverage
-- Backend: 141 tests (`pytest`), mypy strict clean. Includes a 500-hand fuzz test asserting
-  `choose_card_to_play` never produces an illegal card, and end-to-end WebSocket tests where a
-  lone human plus 3 bots resolve an entire bidding round on their own, and where MOON/ALONE's
-  partner never gets a turn over the real WS layer.
+- Backend: 148 tests (`pytest`), mypy strict clean. Includes a 500-hand fuzz test asserting
+  `choose_card_to_play` never produces an illegal card, end-to-end WebSocket tests where a lone
+  human plus 3 bots resolve an entire bidding round on their own, where MOON/ALONE's partner never
+  gets a turn over the real WS layer, and where `finish_game` resolves immediately rather than
+  queuing behind a real (non-zeroed) bot "thinking" delay.
 - Frontend: 44 tests (`vitest`), `tsc` build and `oxlint` clean.
 
 ## Out of scope for now
